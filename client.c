@@ -6,12 +6,12 @@
 
 #define MAX_LINE 100
 
-#define PORT 9876
+#define SERVER_PORT 8000
 
 int main(int argc, char** argv) {
     struct sockaddr_in serv_addr;
     socklen_t slen = sizeof(serv_addr);
-    int s;
+    int s, reply_server;
 
     if (argc != 3) {
         printf("client <server address> <port>\n");
@@ -26,18 +26,36 @@ int main(int argc, char** argv) {
 
     // Preenchimento da socket address structure
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(PORT);
-	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serv_addr.sin_port = htons(SERVER_PORT);
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+    //inet_pton(AF_INET, argv[1], &(serv_addr.sin_addr));
+    // works with INADDR_ANY but not with 206.254.113.35
 
+
+    char server_addr[30];
+	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
+    printf("server address: %s port: %d\n", server_addr, ntohs(serv_addr.sin_port));
     // test udp connection
     char line[MAX_LINE];
+    char reply[MAX_LINE];
 
+    //autenticate_user
+    strcpy(line, "try to autenticate");
+    sendto(s, line, strlen(line), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
+    printf("Send to server: %s\n", line);
+
+    if((reply_server = recvfrom(s, reply, MAX_LINE, 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
+	        perror("Erro no recvfrom");
+	}
+    printf("token received: %s!\n", reply);
+
+    /*
     while(1) {
         fgets(line, 10, stdin);
         line[strlen(line)-1] = '\0';
         sendto(s, line, strlen(line), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
         printf("Send to server: %s\n", line);
-    }
+    }*/
 
     return 0;
 }
