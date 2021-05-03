@@ -3,6 +3,11 @@
 #include <string.h>
 
 #define MAX_LINE 100
+#define MAX_INFO 30
+
+typedef struct {
+    char userID[MAX_INFO];
+} user_info;
 
 int main(int argc, char** argv) {
 
