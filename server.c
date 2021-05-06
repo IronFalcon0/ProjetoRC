@@ -20,9 +20,8 @@ typedef struct user_info{
 user_info users[MAX_USERS];
 int users_ids[MAX_USERS];   // current users connected
 int n_users = 0;
-int count = 0;
 
-user_info *get_info(char *str);
+void get_info(char *str);
 void load_info(char file_name[]);
 void printa(user_info *arr);
 
@@ -69,33 +68,29 @@ int main(int argc, char** argv){
     return 0;
 }
 
-user_info *get_info(char *str){
+void get_info(char *str){
     char *tok;
-
-    // change to static memory, use users[] and n_users
-    user_info *user = malloc(sizeof(user_info));
+    user_info user;
     int cont = 0;
     tok = strtok(str," ");
-    if(tok == NULL) return NULL;
-    strcpy(user->userID,tok);
+    strcpy(user.userID,tok);
     for(cont = 0;tok != NULL;){
         tok = strtok(NULL, " ");
         if(tok != NULL){
-            if(cont == 0) strcpy(user->ip,tok);
-            if(cont == 1) strcpy(user->password,tok);
+            if(cont == 0) strcpy(user.ip,tok);
+            if(cont == 1) strcpy(user.password,tok);
             if(cont == 2 && strlen(tok) == 3){
-                user->client_server = tok[0] - '0';
-                user->p2p = tok[1] - '0';
-                user->grupo = tok[2] - '0';
+                user.client_server = tok[0] - '0';
+                user.p2p = tok[1] - '0';
+                user.grupo = tok[2] - '0';
             }
             cont ++;
         }
     }
     if(cont != 3){
         printf("ERRO de formatacao\n");
-        return NULL;
     }else{
-        return user;
+        users[n_users++] = user;
     }
 
 }
@@ -114,15 +109,14 @@ void load_info(char file_name[]){
     }
     ch[i] =0;
     char *tok = strtok(ch,"\n");
-    user_info *temp;
     while(tok != NULL){
-        if((temp = get_info(tok)) != NULL) users[count++] = *temp;
+        get_info(tok);
         tok = strtok(NULL, "\n");
     }
 }
 
 void printa(user_info *arr){
-  for(int i =0; i<count; i++){
+  for(int i =0; i<n_users; i++){
     printf("UserID = %s\nip = %s\npassword = %s\nclient-server = %d\np2p = %d\ngrupo = %d\n",
     arr[i].userID,arr[i].ip,arr[i].password,arr[i].client_server,arr[i].p2p,arr[i].grupo);
   }
