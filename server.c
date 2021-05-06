@@ -18,7 +18,10 @@ typedef struct user_info{
 } user_info;
 
 user_info users[MAX_USERS];
+int users_ids[MAX_USERS];   // current users connected
+int n_users = 0;
 int count = 0;
+
 user_info *get_info(char *str);
 void load_info(char file_name[]);
 void printa(user_info *arr);
@@ -68,6 +71,8 @@ int main(int argc, char** argv){
 
 user_info *get_info(char *str){
     char *tok;
+
+    // change to static memory, use users[] and n_users
     user_info *user = malloc(sizeof(user_info));
     int cont = 0;
     tok = strtok(str," ");
@@ -101,6 +106,7 @@ void load_info(char file_name[]){
     FILE *fp;
     int i = 0;
     fp = fopen(file_name, "r");
+
     if (fp == NULL)// erro a abrir ficheiro
         printf("ERRO AO ABRIR FICHEIRO\n");
     while((aux = fgetc(fp))!= EOF){
