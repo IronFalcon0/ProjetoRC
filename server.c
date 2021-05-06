@@ -20,6 +20,7 @@ typedef struct user_info{
 user_info users[MAX_USERS];
 int users_ids[MAX_USERS];   // current users connected
 int n_users = 0;
+int count = 0;
 
 user_info *get_info(char *str);
 void load_info(char file_name[]);
@@ -115,13 +116,13 @@ void load_info(char file_name[]){
     char *tok = strtok(ch,"\n");
     user_info *temp;
     while(tok != NULL){
-        if((temp = get_info(tok)) != NULL) users[n_users++] = *temp;
+        if((temp = get_info(tok)) != NULL) users[count++] = *temp;
         tok = strtok(NULL, "\n");
     }
 }
 
 void printa(user_info *arr){
-  for(int i =0; i<n_users; i++){
+  for(int i =0; i<count; i++){
     printf("UserID = %s\nip = %s\npassword = %s\nclient-server = %d\np2p = %d\ngrupo = %d\n",
     arr[i].userID,arr[i].ip,arr[i].password,arr[i].client_server,arr[i].p2p,arr[i].grupo);
   }
