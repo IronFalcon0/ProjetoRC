@@ -9,13 +9,17 @@
 
 #define SERVER_PORT 8000
 
-typedef struct user_info_c{
+
+typedef struct user_info{
     char userName[MAX_INFO];
+    char ip[MAX_INFO];
     char password[MAX_INFO];
-    int token;
+    char client_server;
+    char p2p;
+    char group;
     char autorized;
-    
-} user_info_c;
+
+} user_info;
 
 
 int main(int argc, char** argv) {
@@ -42,14 +46,19 @@ int main(int argc, char** argv) {
     // works with INADDR_ANY but not with 206.254.113.35
 
     // ask user info
-    user_info_c user;
+    user_info user;
     printf("Username: ");
     fgets(user.userName, MAX_INFO, stdin);
+    user.userName[strlen(user.userName)-1] = '\0';
     printf("Password: ");
     fgets(user.password, MAX_INFO, stdin);
+    user.password[strlen(user.password)-1] = '\0';
 
-    user.token = 0;
+    user.client_server = 0;
+    user.p2p = 0;
+    user.group = 0;
     user.autorized = 0;
+
 
     if (strlen(user.userName) == 0 || strlen(user.password) == 0) {
         printf("Invalid user name or password.\n");
@@ -62,34 +71,7 @@ int main(int argc, char** argv) {
     if((reply_server = recvfrom(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Erro no recvfrom");
 	}
-    printf("Respond from server: token:%d; autorized: %d", user.token, user.autorized);
-
-
-    /*
-    char server_addr[30];
-	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
-    printf("server address: %s port: %d\n", server_addr, ntohs(serv_addr.sin_port));
-    // test udp connection
-    char line[MAX_LINE];
-    char reply[MAX_LINE];
-
-    //autenticate_user
-    strcpy(line, "try to autenticate");
-    sendto(s, line, strlen(line), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
-    printf("Send to server: %s\n", line);
-
-    if((reply_server = recvfrom(s, reply, MAX_LINE, 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
-	        perror("Erro no recvfrom");
-	}
-    printf("token received: %s!\n", reply);*/
-
-    /*
-    while(1) {
-        fgets(line, 10, stdin);
-        line[strlen(line)-1] = '\0';
-        sendto(s, line, strlen(line), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
-        printf("Send to server: %s\n", line);
-    }*/
+    printf("Respond from server: autorized: %d\n", user.autorized);
 
     return 0;
 }
