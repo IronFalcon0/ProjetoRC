@@ -11,7 +11,21 @@
 
 typedef struct user_info{
     char userID[MAX_INFO];
+    char ip[MAX_INFO];
+    char password[MAX_INFO];
+    char client_server;
+    char p2p;
+    char grupo;
+
 } user_info;
+
+typedef struct user_info_c{
+    char userName[MAX_INFO];
+    char password[MAX_INFO];
+    int token;
+    char autorized;
+    
+} user_info_c;
 
 int main(int argc, char** argv) {
     struct sockaddr_in serv_addr, clients_addr;
@@ -39,11 +53,30 @@ int main(int argc, char** argv) {
 		perror("Erro no bind");
 	}
 
+    // clients autentication
+    user_info_c info;
+    while(1) {
+        if((recv_len = recvfrom(s, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&slen)) == -1) {
+	        perror("Erro no recvfrom");
+	    }
+        printf("New user received\n");
+
+        // check info
+
+        info.autorized = 1;
+        info.token = 1;
+
+        sendto(s, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
+        printf("User autenticated\n");
+
+
+    }
+
     // print server info
     char server_addr[30];
 	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
     printf("server address: %s port: %d\n", server_addr, ntohs(serv_addr.sin_port));
-
+    /*
     // verification from client
     char line[MAX_LINE];
     char reply[MAX_LINE];
@@ -61,7 +94,7 @@ int main(int argc, char** argv) {
     // reply = autenticate_user(line);
     strcpy(reply, "autentication done");
     sendto(s, reply, strlen(reply), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
-    printf("%s\n", reply);
+    printf("%s\n", reply);*/
     
     
     
