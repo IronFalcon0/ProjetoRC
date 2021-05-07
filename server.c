@@ -13,7 +13,7 @@ typedef struct user_info{
     char password[MAX_INFO];
     bool client_server;
     bool p2p;
-    bool grupo;
+    bool group;
 
 } user_info;
 
@@ -82,13 +82,13 @@ void get_info(char *str){
             if(cont == 2 && strlen(tok) == 3){
                 user.client_server = tok[0] - '0';
                 user.p2p = tok[1] - '0';
-                user.grupo = tok[2] - '0';
+                user.group = tok[2] - '0';
             }
             cont ++;
         }
     }
     if(cont != 3){
-        printf("ERRO de formatacao\n");
+        printf("ERROR: WRONG TEXT FORMAT\n");
     }else{
         users[n_users++] = user;
     }
@@ -103,7 +103,7 @@ void load_info(char file_name[]){
     fp = fopen(file_name, "r");
 
     if (fp == NULL)// erro a abrir ficheiro
-        printf("ERRO AO ABRIR FICHEIRO\n");
+        printf("ERROR: CANNOT OPEN FILE\n");
     while((aux = fgetc(fp))!= EOF){
         ch[i++] = aux;
     }
@@ -117,7 +117,7 @@ void load_info(char file_name[]){
 
 void printa(user_info *arr){
   for(int i =0; i<n_users; i++){
-    printf("UserID = %s\nip = %s\npassword = %s\nclient-server = %d\np2p = %d\ngrupo = %d\n",
-    arr[i].userID,arr[i].ip,arr[i].password,arr[i].client_server,arr[i].p2p,arr[i].grupo);
+    printf("UserID = %s\nip = %s\npassword = %s\nclient-server = %d\np2p = %d\ngroup = %d\n",
+    arr[i].userID,arr[i].ip,arr[i].password,arr[i].client_server,arr[i].p2p,arr[i].group);
   }
 }
