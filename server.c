@@ -4,18 +4,14 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <stdbool.h>
+#include <pthread.h>
+#include <signal.h>
+#include <unistd.h>
 
 
 #define MAX_LINE 100
 #define MAX_INFO 30
 #define MAX_USERS 50
-
-#define PORT 9000      // server port
-
-
-user_info users[MAX_USERS];
-int users_ids[MAX_USERS];   // current users connected
-int n_users = 0;
 
 
 typedef struct user_info{
@@ -29,6 +25,29 @@ typedef struct user_info{
 
 } user_info;
 
+user_info users[MAX_USERS];
+int users_ids[MAX_USERS];   // current users connected
+int n_users = 0;
+int fd_tcp;
+char signal_exit = 0;
+
+pthread_t config_thread;
+
+
+void sigusr1(int sig_num) {
+    pthread_exit(NULL);
+}
+
+void sigint (int sig_num) {
+    //close TCP connection
+    close(fd_tcp);
+
+    //kill thread
+    pthread_kill(config_thread, SIGUSR1);
+    printf("Thread killed\n");
+
+    exit(0);
+}
 
 void get_info(char *);
 
@@ -39,10 +58,22 @@ void printa(user_info *);
 int find_user(char [], char []);
 
 
+void *config_users(void* i) {
+    signal(SIGUSR1, sigusr1);
+    printf("Thread initialized\n");
+
+    while(1) {
+
+    }
+}
+
 int main(int argc, char** argv){
-    struct sockaddr_in serv_addr, clients_addr;
+
+    signal(SIGINT, sigint);
+
+    struct sockaddr_in serv_clients_addr, serv_config_addr, clients_addr;
     socklen_t slen = sizeof(clients_addr);
-	int s, recv_len;
+	int s_clients, recv_len;
 
     if (argc != 4) {
         printf("server <port clients> <port config> <log file>\n");
@@ -52,26 +83,53 @@ int main(int argc, char** argv){
     load_info(argv[3]);
     printa(users);
 
+    // initialize TCP connection
+    bzero((void *) &serv_config_addr, sizeof(serv_config_addr));
+    serv_config_addr.sin_family = AF_INET;
+    serv_config_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_config_addr.sin_port = htons(atoi(argv[2]));
+
+    if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+		perror("na funcao socket");
+
+    if ( bind(fd_tcp, (struct sockaddr*) &serv_config_addr,sizeof(serv_config_addr)) < 0)
+		perror("na funcao bind");
+
+    // wait for connections
+    if( listen(fd_tcp, 5) < 0)
+		perror("na funcao listen");
+
+    // create thread to handle with config users
+    pthread_create(&config_thread, NULL, config_users, NULL);
+
+
     // initialize UDP connection and verification
-    // Cria um socket para recepção de pacotes UDP
-	if (( s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+    // socket to receive UDP packages from clients
+	if ((s_clients = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
 		perror("Erro na criação do socket");
 	}
 
     // Preenchimento da socket address structure
-	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(atoi(argv[1]));
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
+	serv_clients_addr.sin_family = AF_INET;
+	serv_clients_addr.sin_port = htons(atoi(argv[1]));
+    serv_clients_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
 
     // Associa o socket à informação de endereço
-	if (bind(s,(struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
+	if (bind(s_clients, (struct sockaddr*)&serv_clients_addr, sizeof(serv_clients_addr)) == -1) {
 		perror("Erro no bind");
 	}
+
+    
+    // print server info
+    char server_addr[30];
+	inet_ntop(AF_INET, &(serv_clients_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
+    printf("server address: %s\n UDP port: %d\n TCP port: %d\n", server_addr, ntohs(serv_clients_addr.sin_port), ntohs(serv_config_addr.sin_port));
+    
 
     // clients autentication
     user_info info;
     while(1) {
-        if((recv_len = recvfrom(s, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&slen)) == -1) {
+        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Erro no recvfrom");
 	    }
         printf("New user received\n");
@@ -80,22 +138,17 @@ int main(int argc, char** argv){
         if (find_user(info.userName, info.password) == 1) {
             info.autorized = 1;
 
-            sendto(s, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
+            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
             printf("User autenticated\n");
         } else {
             info.autorized = 0;
 
-            sendto(s, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
+            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
             printf("User not autenticated\n");
         }
 
 
     }
-
-    // print server info
-    char server_addr[30];
-	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
-    printf("server address: %s port: %d\n", server_addr, ntohs(serv_addr.sin_port));
     
     return 0;
 }
@@ -168,4 +221,4 @@ void printa(user_info *arr){
         printf("User %d:\n\tuserName = %s\n\tip = %s\n\tpassword = %s\n\tclient-server = %d\n\tp2p = %d\n\tgrupo = %d\n\n",
         i, arr[i].userName,arr[i].ip,arr[i].password,arr[i].client_server,arr[i].p2p,arr[i].group);
     }
-}s
+}
