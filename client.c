@@ -7,8 +7,6 @@
 #define MAX_LINE 100
 #define MAX_INFO 30
 
-#define SERVER_PORT 8000
-
 
 typedef struct user_info{
     char userName[MAX_INFO];
@@ -40,7 +38,7 @@ int main(int argc, char** argv) {
 
     // Preenchimento da socket address structure
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(SERVER_PORT);
+	serv_addr.sin_port = htons(atoi(argv[2]));
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
     //inet_pton(AF_INET, argv[1], &(serv_addr.sin_addr));
     // works with INADDR_ANY but not with 206.254.113.35

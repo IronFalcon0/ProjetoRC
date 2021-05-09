@@ -7,6 +7,11 @@
 #include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
+// #include <sys/types.h>
+// #include <arpa/inet.h>
+// #include <netdb.h>
+// #include <netinet/in.h>
+#include <sys/wait.h>
 
 
 #define MAX_LINE 100
@@ -31,6 +36,10 @@ int n_users = 0;
 int fd_tcp;
 char signal_exit = 0;
 
+struct sockaddr_in serv_clients_addr, serv_config_addr, clients_addr;
+socklen_t clients_len = sizeof(clients_addr);
+int s_clients, recv_len, config_size;
+
 pthread_t config_thread;
 
 
@@ -50,30 +59,17 @@ void sigint (int sig_num) {
 }
 
 void get_info(char *);
-
 void load_info(char []);
-
 void printa(user_info *);
-
 int find_user(char [], char []);
+void *config_users(void*);
 
-
-void *config_users(void* i) {
-    signal(SIGUSR1, sigusr1);
-    printf("Thread initialized\n");
-
-    while(1) {
-
-    }
-}
 
 int main(int argc, char** argv){
 
     signal(SIGINT, sigint);
 
-    struct sockaddr_in serv_clients_addr, serv_config_addr, clients_addr;
-    socklen_t slen = sizeof(clients_addr);
-	int s_clients, recv_len;
+    
 
     if (argc != 4) {
         printf("server <port clients> <port config> <log file>\n");
@@ -129,7 +125,7 @@ int main(int argc, char** argv){
     // clients autentication
     user_info info;
     while(1) {
-        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&slen)) == -1) {
+        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
 	        perror("Erro no recvfrom");
 	    }
         printf("New user received\n");
@@ -138,12 +134,12 @@ int main(int argc, char** argv){
         if (find_user(info.userName, info.password) == 1) {
             info.autorized = 1;
 
-            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
+            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
             printf("User autenticated\n");
         } else {
             info.autorized = 0;
 
-            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) slen);
+            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
             printf("User not autenticated\n");
         }
 
@@ -222,3 +218,29 @@ void printa(user_info *arr){
         i, arr[i].userName,arr[i].ip,arr[i].password,arr[i].client_server,arr[i].p2p,arr[i].group);
     }
 }
+
+
+void *config_users(void* i) {
+    signal(SIGUSR1, sigusr1);
+    printf("Thread initialized\n");
+    
+    int conf = 0, nread = 0;
+    char line[MAX_LINE];
+    while(1) {
+        while(waitpid(-1,NULL,WNOHANG)>0);
+
+        conf = accept(fd_tcp,(struct sockaddr *) &serv_config_addr,(socklen_t *)&config_size);
+        
+        if (conf > 0) {
+            nread = read(conf, line, MAX_LINE-1);
+            if (nread != 0) {
+                printf("Received config: %s", line);
+                // commands TODO
+
+            }
+
+        }
+
+    }
+}
+
