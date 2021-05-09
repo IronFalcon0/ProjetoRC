@@ -31,17 +31,15 @@ int main(int argc, char** argv) {
     }
 
     // UDP connection to server
-    // Cria um socket para recepção de pacotes UDP
+    // socket for UDP packages
 	if ((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
 		perror("Erro na criação do socket");
 	}
 
-    // Preenchimento da socket address structure
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(atoi(argv[2]));
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
-    //inet_pton(AF_INET, argv[1], &(serv_addr.sin_addr));
-    // works with INADDR_ANY but not with 206.254.113.35
+    inet_pton(AF_INET, argv[1], &(serv_addr.sin_addr));
+    //serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
 
     // ask user info
     user_info user;

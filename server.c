@@ -39,6 +39,7 @@ char signal_exit = 0;
 struct sockaddr_in serv_clients_addr, serv_config_addr, clients_addr;
 socklen_t clients_len = sizeof(clients_addr);
 int s_clients, recv_len, config_size;
+user_info info;
 
 pthread_t config_thread;
 
@@ -63,13 +64,13 @@ void load_info(char []);
 void printa(user_info *);
 int find_user(char [], char []);
 void *config_users(void*);
+void autentication();
 
 
 int main(int argc, char** argv){
 
     signal(SIGINT, sigint);
 
-    
 
     if (argc != 4) {
         printf("server <port clients> <port config> <log file>\n");
@@ -105,12 +106,11 @@ int main(int argc, char** argv){
 		perror("Erro na criação do socket");
 	}
 
-    // Preenchimento da socket address structure
 	serv_clients_addr.sin_family = AF_INET;
 	serv_clients_addr.sin_port = htons(atoi(argv[1]));
     serv_clients_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
 
-    // Associa o socket à informação de endereço
+    // bind socket
 	if (bind(s_clients, (struct sockaddr*)&serv_clients_addr, sizeof(serv_clients_addr)) == -1) {
 		perror("Erro no bind");
 	}
@@ -123,31 +123,34 @@ int main(int argc, char** argv){
     
 
     // clients autentication
-    user_info info;
     while(1) {
-        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
-	        perror("Erro no recvfrom");
-	    }
-        printf("New user received\n");
-
-        // check info
-        if (find_user(info.userName, info.password) == 1) {
-            info.autorized = 1;
-
-            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
-            printf("User autenticated\n");
-        } else {
-            info.autorized = 0;
-
-            sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
-            printf("User not autenticated\n");
-        }
-
+        autentication();
 
     }
     
     return 0;
 }
+
+void autentication() {
+    if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
+	        perror("Erro no recvfrom");
+    }
+    printf("New user received\n");
+
+    // check info
+    if (find_user(info.userName, info.password) == 1) {
+        info.autorized = 1;
+
+        sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+        printf("User autenticated\n");
+    } else {
+        info.autorized = 0;
+
+        sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+        printf("User not autenticated\n");
+    }
+}
+
 
 int find_user(char userName[MAX_INFO], char password[MAX_INFO]) {
     for (int i = 0; i< n_users; i++) {
