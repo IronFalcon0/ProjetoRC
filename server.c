@@ -17,6 +17,7 @@
 #define MAX_LINE 100
 #define MAX_INFO 30
 #define MAX_USERS 50
+#define MAX_THREADS 10
 
 
 typedef struct user_info{
@@ -42,6 +43,8 @@ int s_clients, recv_len, config_size;
 user_info info;
 
 pthread_t config_thread;
+pthread_t connections_threads[MAX_THREADS];
+int connections_counter = 0;
 
 
 void sigusr1(int sig_num) {
@@ -65,6 +68,10 @@ void printa(user_info *);
 int find_user(char [], char []);
 void *config_users(void*);
 void autentication();
+void create_connection();
+void *client_server();
+void *p2p();
+void *group_conn();
 
 
 int main(int argc, char** argv){
@@ -87,14 +94,14 @@ int main(int argc, char** argv){
     serv_config_addr.sin_port = htons(atoi(argv[2]));
 
     if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-		perror("na funcao socket");
+		perror("Error on function socket");
 
     if ( bind(fd_tcp, (struct sockaddr*) &serv_config_addr,sizeof(serv_config_addr)) < 0)
-		perror("na funcao bind");
+		perror("Error on function bind");
 
     // wait for connections
     if( listen(fd_tcp, 5) < 0)
-		perror("na funcao listen");
+		perror("Error on function listen");
 
     // create thread to handle with config users
     pthread_create(&config_thread, NULL, config_users, NULL);
@@ -103,7 +110,7 @@ int main(int argc, char** argv){
     // initialize UDP connection and verification
     // socket to receive UDP packages from clients
 	if ((s_clients = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-		perror("Erro na criação do socket");
+		perror("Error creating socket");
 	}
 
 	serv_clients_addr.sin_family = AF_INET;
@@ -112,34 +119,76 @@ int main(int argc, char** argv){
 
     // bind socket
 	if (bind(s_clients, (struct sockaddr*)&serv_clients_addr, sizeof(serv_clients_addr)) == -1) {
-		perror("Erro no bind");
+		perror("Error on function bind");
 	}
 
     
     // print server info
     char server_addr[30];
 	inet_ntop(AF_INET, &(serv_clients_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
-    printf("server address: %s\n UDP port: %d\n TCP port: %d\n", server_addr, ntohs(serv_clients_addr.sin_port), ntohs(serv_config_addr.sin_port));
+    printf("Server address: %s\n UDP port: %d\n TCP port: %d\n", server_addr, ntohs(serv_clients_addr.sin_port), ntohs(serv_config_addr.sin_port));
     
 
-    // clients autentication
     while(1) {
         autentication();
+        create_connection();
+
+        
 
     }
     
     return 0;
 }
 
+void *client_server() {
+    pthread_exit(0);
+}
+
+void *p2p() {
+    pthread_exit(0);
+}
+
+void *group_conn() {
+    pthread_exit(0);
+}
+
+void create_connection() {
+    int conn_type;
+    // receive type of connection, 0 means no connection
+    if((recv_len = recvfrom(s_clients, &conn_type, sizeof(int), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
+        perror("Error on recvfrom");
+    }
+
+    if (conn_type == 1) {
+        pthread_create(&connections_threads[connections_counter], NULL, client_server, NULL);
+        connections_counter++;
+
+    } else if (conn_type == 2) {
+        pthread_create(&connections_threads[connections_counter], NULL, p2p, NULL);
+        connections_counter++;
+
+    } else if (conn_type == 3) {
+        pthread_create(&connections_threads[connections_counter], NULL, group_conn, NULL);
+        connections_counter++;
+
+    } else {
+        printf("Invalid connection type\n");
+    }
+}
+
 void autentication() {
     if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
-	        perror("Erro no recvfrom");
+	        perror("Error on recvfrom");
     }
     printf("New user received\n");
 
     // check info
-    if (find_user(info.userName, info.password) == 1) {
+    int user_index = find_user(info.userName, info.password);
+    if (user_index != -1) {
         info.autorized = 1;
+        info.client_server = users[user_index].client_server;
+        info.p2p =  users[user_index].p2p;
+        info.group =  users[user_index].group;
 
         sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
         printf("User autenticated\n");
@@ -155,10 +204,10 @@ void autentication() {
 int find_user(char userName[MAX_INFO], char password[MAX_INFO]) {
     for (int i = 0; i< n_users; i++) {
         if (strcmp(userName, users[i].userName) == 0 && strcmp(password, users[i].password) == 0) {
-                return 1;
+                return i;
         }
     }
-    return 0;
+    return -1;
 }
 
 
@@ -185,7 +234,7 @@ void get_info(char *str){
     }
 
     if(count != 3){
-        printf("ERRO de formatacao\n");
+        printf("Wrong format\n");
     }else{
         users[n_users] = user;
         n_users++;
@@ -202,7 +251,7 @@ void load_info(char file_name[]){
     fp = fopen(file_name, "r");
 
     if (fp == NULL)// erro a abrir ficheiro
-        printf("ERRO AO ABRIR FICHEIRO\n");
+        printf("Error opening file %s\n", file_name);
 
     while(fgets(line, MAX_LINE, fp) != NULL) {
         char *tok = strtok(line,"\n");
