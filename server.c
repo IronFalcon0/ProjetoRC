@@ -30,6 +30,7 @@ typedef struct user_info{
 
 } user_info;
 
+char file_name[MAX_LINE];
 user_info users[MAX_USERS];
 int users_ids[MAX_USERS];   // current users connected
 int n_users = 0;
@@ -60,7 +61,7 @@ void sigint (int sig_num) {
 }
 
 void get_info(char *);
-void load_info(char []);
+void load_info();
 void printa(user_info *);
 int find_user(char [], char []);
 void *config_users(void*);
@@ -68,6 +69,8 @@ void autentication();
 
 
 int main(int argc, char** argv){
+
+    sprintf(file_name,"%s",argv[3]);
 
     signal(SIGINT, sigint);
 
@@ -115,19 +118,20 @@ int main(int argc, char** argv){
 		perror("Erro no bind");
 	}
 
-    
+
     // print server info
     char server_addr[30];
 	inet_ntop(AF_INET, &(serv_clients_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
     printf("server address: %s\n UDP port: %d\n TCP port: %d\n", server_addr, ntohs(serv_clients_addr.sin_port), ntohs(serv_config_addr.sin_port));
-    
+
 
     // clients autentication
     while(1) {
         autentication();
 
     }
-    
+
+
     return 0;
 }
 
@@ -168,7 +172,7 @@ void get_info(char *str){
     int count = 0;
     tok = strtok(str," ");
     strcpy(user.userName,tok);
-    
+
     for(count = 0; tok != NULL;){
         tok = strtok(NULL, " ");
 
@@ -187,6 +191,12 @@ void get_info(char *str){
     if(count != 3){
         printf("ERRO de formatacao\n");
     }else{
+        for(int i=0; i< n_users; i++){
+            if(strcmp(user.userName,users[i].userName) == 0){
+                printf("Username %s is already in use\n",user.userName);
+                return;
+            }
+        }
         users[n_users] = user;
         n_users++;
     }
@@ -194,10 +204,10 @@ void get_info(char *str){
 }
 
 
-void load_info(char file_name[]){
+void load_info(){
     char line[MAX_LINE];
     FILE *fp;
-    
+
     //int i = 0;
     fp = fopen(file_name, "r");
 
@@ -206,12 +216,13 @@ void load_info(char file_name[]){
 
     while(fgets(line, MAX_LINE, fp) != NULL) {
         char *tok = strtok(line,"\n");
-        
+
         while(tok != NULL){
             get_info(tok);
             tok = strtok(NULL, "\n");
         }
     }
+    fclose(fp);
 }
 
 
@@ -222,28 +233,104 @@ void printa(user_info *arr){
     }
 }
 
+void write_on_file(char *str){
+    FILE *fp;
+    fp = fopen(file_name,"a");
+    if(fp == NULL) printf("ERROR: CANNOT OPEN FILE\n");
+    fprintf(fp,"%s\n",str);
+    fclose(fp);
+}
+
+int find_username(char name[]){
+    for (int i = 0; i< n_users; i++) {
+        if (strcmp(name, users[i].userName) == 0) return i;
+    }
+    return -1;
+}
+
+void remove_from_file(char name[]){
+    char *aux[n_users];
+    char line[MAX_LINE];
+    FILE *fp;
+    int i = 0;
+    char *tok;
+    fp = fopen(file_name, "r");
+    if(fp == NULL){
+        printf("ERROR: CANNOT OPEN FILE\n");
+        return;
+    }
+    while(fgets(line, MAX_LINE, fp) != NULL){
+        //char *tok = strtok(line,"\n");
+        //while(tok != NULL){
+        tok = strtok(line, " ");
+        if(strcmp(tok,name)==0){
+            continue;
+        }
+        aux[i++] = line;
+            //tok = strtok(NULL, "\n");
+    }
+    fclose(fp);
+    fp = fopen(file_name,"w");
+    if(fp == NULL){
+        printf("ERROR: CANNOT OPEN FILE\n");
+        return;
+    }
+    for(int j =0; j<i;j++){
+        fprintf(fp,"%s",aux[j]);
+    }
+    fclose(fp);
+
+}
+
 
 void *config_users(void* i) {
     signal(SIGUSR1, sigusr1);
     printf("Thread initialized\n");
-    
+
     int conf = 0, nread = 0;
     char line[MAX_LINE];
     while(1) {
-        while(waitpid(-1,NULL,WNOHANG)>0);
+        //while(waitpid(-1,NULL,WNOHANG)>0);
 
         conf = accept(fd_tcp,(struct sockaddr *) &serv_config_addr,(socklen_t *)&config_size);
-        
+
         if (conf > 0) {
             nread = read(conf, line, MAX_LINE-1);
+            char *tok = strtok(line," ");
+            char *aux2 = strtok(NULL, "\0");
             if (nread != 0) {
+                line[nread] = 0;
                 printf("Received config: %s", line);
                 // commands TODO
-
+                if(strcasecmp(line, "list") == 0){
+                    int i;
+                    for(i=0; i < n_users ; i++ ){
+                        printf("User-id => %s\nIP => %s\nPassword => %s\nClient-Server => %c\nP2p => %c\nGrupo => %c\n\n",
+                        users[i].userName,users[i].ip,users[i].password,users[i].client_server,users[i].p2p,users[i].group);
+                    }
+                }
+                else if(strcasecmp(tok,"add") == 0){
+                    get_info(aux2);
+                    write_on_file(aux2);
+                    printf("User added successfully\n");
+                }
+                else if(strcasecmp(tok,"del")){
+                    int x;
+                    if((x=find_username(aux2)) != -1){
+                        for(; x< n_users; x++){
+                            users[x] = users[x+1];
+                        }
+                        n_users --;
+                        remove_from_file(aux2);
+                        printf("User removed\n");
+                    }
+                }
+                else if(strcasecmp(line, "quit")){
+                    close(fdtcp);
+                }
             }
 
         }
 
     }
 }
-
