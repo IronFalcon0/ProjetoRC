@@ -54,8 +54,6 @@ void sigint (int sig_num) {
 
 int main(int argc, char** argv) {
 
-    signal(SIGINT, sigint);
-
     if (argc != 3) {
         printf("client <server address> <port>\n");
         exit(-1);
@@ -106,6 +104,8 @@ int main(int argc, char** argv) {
 
     printf("Login with success\n");
 
+    signal(SIGINT, sigint);
+
     // creates thread to receive messages
     pthread_create(&msg_thread, NULL, messages_incoming, NULL);
 
@@ -116,7 +116,6 @@ int main(int argc, char** argv) {
 
         while(type < 0 && type > 3) {
             scanf("%d", &type);
-            printf("!!%d\n", type);
         }
         
         if (type == 1 && user.client_server == 1) {

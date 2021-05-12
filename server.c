@@ -34,15 +34,15 @@ typedef struct user_info{
 
 } user_info;
 
+
 user_info users[MAX_USERS];
-int users_ids[MAX_USERS];   // current users connected
 int n_users = 0;
 int fd_tcp;
-char signal_exit = 0;
 
 struct sockaddr_in serv_addr, serv_config_addr, clients_addr;
 socklen_t clients_len = sizeof(clients_addr);
-int s_clients, recv_len, config_size;
+socklen_t config_size = sizeof(serv_config_addr);
+int s_clients, recv_len;
 user_info info;
 
 pthread_t config_thread;
@@ -51,6 +51,7 @@ pthread_t config_thread;
 void sigusr1(int sig_num) {
     pthread_exit(NULL);
 }
+
 
 void sigint (int sig_num) {
     //close TCP connection
@@ -62,6 +63,7 @@ void sigint (int sig_num) {
 
     exit(0);
 }
+
 
 void get_info(char *);
 void load_info(char []);
@@ -79,14 +81,13 @@ int main(int argc, char** argv){
 
     signal(SIGINT, sigint);
 
-
     if (argc != 4) {
         printf("server <port clients> <port config> <log file>\n");
         exit(-1);
     }
 
+    // load user info from log file
     load_info(argv[3]);
-    printa(users);
 
     // initialize TCP connection
     bzero((void *) &serv_config_addr, sizeof(serv_config_addr));
@@ -101,15 +102,14 @@ int main(int argc, char** argv){
 		perror("Error on function bind");
 
     // wait for connections
-    if( listen(fd_tcp, 5) < 0)
+    if(listen(fd_tcp, 5) < 0)
 		perror("Error on function listen");
 
-    // create thread to handle with config users
+    // create thread to handle config users
     pthread_create(&config_thread, NULL, config_users, NULL);
 
 
-    // initialize UDP connection and verification
-    // socket to receive UDP packages from clients
+    // initialize UDP connection
 	if ((s_clients = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
 		perror("Error creating socket");
 	}
@@ -117,10 +117,8 @@ int main(int argc, char** argv){
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(atoi(argv[1]));
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
-
     // clients_addr.sin_port = htons(atoi(argv[1]));  // don't know if needed?!
 
-    // bind socket
 	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
 		perror("Error on function bind");
 	}
@@ -131,10 +129,12 @@ int main(int argc, char** argv){
 	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
     printf("Server address: %s == UDP port: %d == TCP port: %d == Clients_port: %d\n", server_addr, ntohs(serv_addr.sin_port), ntohs(serv_config_addr.sin_port), ntohs(clients_addr.sin_port));
     
+    // receive info from clients and responds accordingly
     while(1) {
-        if((recv_len = recvfrom(s_clients, &info, MAX_LINE, 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
+        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
             perror("Error on recvfrom");
         }
+
         printf("IP: %s === Port: %d\n", inet_ntoa(clients_addr.sin_addr), ntohs(clients_addr.sin_port));
 
         if (strcmp(info.behaviour, "autentication") == 0){
@@ -143,23 +143,42 @@ int main(int argc, char** argv){
         } else if (strcmp(info.behaviour, "send_message") == 0){
             client_server();
         }
-        
-
     }
     
     return 0;
 }
 
+
 void client_server() {
-    printf("!%s!%d\n", info.message, strlen(info.message));
-    sendto(s_clients, &info.message, sizeof(info.message), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+    char oldIP[MAX_INFO];
+    inet_ntop(AF_INET, &(serv_addr.sin_addr), oldIP, INET_ADDRSTRLEN);
+
+    printf("oldIP: %s\n", oldIP);
+    printf("===%d=\n", inet_pton(AF_INET, info.IP_dest, &(serv_addr.sin_addr)));
+    // change ip to client2
+    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, info.IP_dest, &(serv_addr.sin_addr)));
+
+    if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
+		perror("Error on function bind");
+	}
+
+    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
     printf("Message successufly send to client with IP: %s! %s\n", info.IP_dest, info.message);
 
+    // sets ip back to old
+    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, oldIP, &(serv_addr.sin_addr)));
+
+    if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
+		perror("Error on function bind");
+	}
+
 }
+
 
 void p2p() {
 
 }
+
 
 void group_conn() {
 
@@ -177,14 +196,13 @@ void autentication() {
         info.p2p =  users[user_index].p2p;
         info.group =  users[user_index].group;
 
-        sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
         printf("User autenticated\n");
+
     } else {
         info.autorized = 0;
-
-        sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
         printf("User not autenticated\n");
     }
+    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
 }
 
 
@@ -234,7 +252,6 @@ void load_info(char file_name[]){
     char line[MAX_LINE];
     FILE *fp;
     
-    //int i = 0;
     fp = fopen(file_name, "r");
 
     if (fp == NULL)// erro a abrir ficheiro
