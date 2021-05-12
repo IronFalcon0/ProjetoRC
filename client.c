@@ -21,7 +21,7 @@ typedef struct user_info {
 } user_info;
 
 typedef struct package_msg {
-    char IP_dest[MAX_INFO];
+    char IP_dest[MAX_LINE];
     char message[MAX_TEXT];
 
 } package_msg;
@@ -31,6 +31,7 @@ struct sockaddr_in serv_addr;
 socklen_t slen = sizeof(serv_addr);
 int s, reply_server;
 user_info user;
+char send_command[MAX_LINE];
 
 
 void client_server();
@@ -76,6 +77,10 @@ int main(int argc, char** argv) {
     }
 
     printf("Information send to server\n");
+    strcpy(send_command, "autentication");
+    printf("%s\n", send_command);
+    sendto(s, &send_command, strlen(send_command), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
+    
     sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
     if((reply_server = recvfrom(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
@@ -98,8 +103,10 @@ int main(int argc, char** argv) {
         scanf("%d", &type);
         printf("!!%d\n", type);
     }
-
+    
     if (type == 1 && user.client_server == 1) {
+        strcpy(send_command, "create_connection");
+        sendto(s, &send_command, strlen(send_command), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
         sendto(s, &type, sizeof(int), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
         // wait recvfrom
         client_server();
@@ -117,6 +124,7 @@ int main(int argc, char** argv) {
 
 
 
+
 void client_server() {
     package_msg msg;
 
@@ -125,11 +133,16 @@ void client_server() {
     printf("Message: ");
     scanf("%s", msg.message);
 
-    while(strcmp(msg.message,"exit") == 0) {
+    while(strcmp(msg.message,"exit") != 0) {
+        
         printf("Sending to %s: %s\n", msg.IP_dest, msg.message);
         sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
+
+        printf("Next message: ");
         scanf("%s", msg.message);
     }
+    // sends exit message to end terminate communication
+    sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
 }
 
