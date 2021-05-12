@@ -40,7 +40,7 @@ int n_users = 0;
 int fd_tcp;
 char signal_exit = 0;
 
-struct sockaddr_in serv_clients_addr, serv_config_addr, clients_addr;
+struct sockaddr_in serv_addr, serv_config_addr, clients_addr;
 socklen_t clients_len = sizeof(clients_addr);
 int s_clients, recv_len, config_size;
 user_info info;
@@ -114,37 +114,35 @@ int main(int argc, char** argv){
 		perror("Error creating socket");
 	}
 
-	serv_clients_addr.sin_family = AF_INET;
-	serv_clients_addr.sin_port = htons(atoi(argv[1]));
-    serv_clients_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(atoi(argv[1]));
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
+
+    // clients_addr.sin_port = htons(atoi(argv[1]));  // don't know if needed?!
 
     // bind socket
-	if (bind(s_clients, (struct sockaddr*)&serv_clients_addr, sizeof(serv_clients_addr)) == -1) {
+	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
 		perror("Error on function bind");
 	}
 
     
     // print server info
     char server_addr[30];
-	inet_ntop(AF_INET, &(serv_clients_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
-    printf("Server address: %s\n UDP port: %d\n TCP port: %d\n", server_addr, ntohs(serv_clients_addr.sin_port), ntohs(serv_config_addr.sin_port));
+	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
+    printf("Server address: %s == UDP port: %d == TCP port: %d == Clients_port: %d\n", server_addr, ntohs(serv_addr.sin_port), ntohs(serv_config_addr.sin_port), ntohs(clients_addr.sin_port));
     
     while(1) {
         if((recv_len = recvfrom(s_clients, &info, MAX_LINE, 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
             perror("Error on recvfrom");
         }
+        printf("IP: %s === Port: %d\n", inet_ntoa(clients_addr.sin_addr), ntohs(clients_addr.sin_port));
 
-        printf("%s and = %d\n", info.behaviour, strcmp(info.behaviour, "send_message"));
         if (strcmp(info.behaviour, "autentication") == 0){
             autentication();
-            
+
         } else if (strcmp(info.behaviour, "send_message") == 0){
             client_server();
         }
-
-        
-        
-
         
 
     }
@@ -153,20 +151,10 @@ int main(int argc, char** argv){
 }
 
 void client_server() {
-
+    printf("!%s!%d\n", info.message, strlen(info.message));
     sendto(s_clients, &info.message, sizeof(info.message), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
     printf("Message successufly send to client with IP: %s! %s\n", info.IP_dest, info.message);
 
-    while(strcpy(info.message, "exit") != 0) {
-        // receive message from client1
-        if((recv_len = recvfrom(s_clients, &info.message, sizeof(int), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
-            perror("Error on recvfrom");
-        }
-
-        // sends message to client2
-        sendto(s_clients, &info.message, sizeof(info.message), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
-        printf("Message successufly send to client with IP: %s! %s\n", info.IP_dest, info.message);
-    }
 }
 
 void p2p() {
