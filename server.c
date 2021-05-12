@@ -325,9 +325,6 @@ void *config_users(void* i) {
                         printf("User removed\n");
                     }
                 }
-                else if(strcasecmp(line, "quit")){
-                    close(fdtcp);
-                }
             }
 
         }
