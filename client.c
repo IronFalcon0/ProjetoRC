@@ -10,6 +10,7 @@
 
 
 typedef struct user_info {
+    char behaviour[MAX_INFO];
     char userName[MAX_INFO];
     char ip[MAX_INFO];
     char password[MAX_INFO];
@@ -17,21 +18,17 @@ typedef struct user_info {
     char p2p;
     char group;
     char autorized;
-
-} user_info;
-
-typedef struct package_msg {
-    char IP_dest[MAX_LINE];
+    int type;
+    char IP_dest[MAX_INFO];
     char message[MAX_TEXT];
 
-} package_msg;
+} user_info;
 
 
 struct sockaddr_in serv_addr;
 socklen_t slen = sizeof(serv_addr);
 int s, reply_server;
 user_info user;
-char send_command[MAX_LINE];
 
 
 void client_server();
@@ -77,10 +74,7 @@ int main(int argc, char** argv) {
     }
 
     printf("Information send to server\n");
-    strcpy(send_command, "autentication");
-    printf("%s\n", send_command);
-    sendto(s, &send_command, strlen(send_command), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
-    
+    strcpy(user.behaviour, "autentication");
     sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
     if((reply_server = recvfrom(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
@@ -95,24 +89,21 @@ int main(int argc, char** argv) {
     // recvfrom
 
     printf("Login with success\n");
-    int type;
-    printf("Types of connections allowed:\n\t1 - client-server: %d\n\t2 - P2P: %d\n\t3 - group connection: %d\n", user.client_server, user.p2p, user.group);
-    scanf("%d", &type);
 
-    while(type < 0 && type > 3) {
-        scanf("%d", &type);
-        printf("!!%d\n", type);
+    printf("Types of connections allowed:\n\t1 - client-server: %d\n\t2 - P2P: %d\n\t3 - group connection: %d\n", user.client_server, user.p2p, user.group);
+    scanf("%d", &user.type);
+
+    while(user.type < 0 && user.type > 3) {
+        scanf("%d", &user.type);
+        printf("!!%d\n", user.type);
     }
     
-    if (type == 1 && user.client_server == 1) {
-        strcpy(send_command, "create_connection");
-        sendto(s, &send_command, strlen(send_command), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
-        sendto(s, &type, sizeof(int), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
-        // wait recvfrom
+    if (user.type == 1 && user.client_server == 1) {
+        strcpy(user.behaviour, "send_message");
         client_server();
-    } else if (type == 2 && user.p2p == 1) {
+    } else if (user.type == 2 && user.p2p == 1) {
         p2p();
-    } else if (type == 3 && user.group == 1) {
+    } else if (user.type == 3 && user.group == 1) {
         group();
     } else {
         printf("Connection type not allowed\n");
@@ -126,23 +117,22 @@ int main(int argc, char** argv) {
 
 
 void client_server() {
-    package_msg msg;
 
     printf("IP destination: ");
-    scanf("%s", msg.IP_dest);
+    scanf("%s", user.IP_dest);
     printf("Message: ");
-    scanf("%s", msg.message);
+    scanf("%s", user.message);
 
-    while(strcmp(msg.message,"exit") != 0) {
-        
-        printf("Sending to %s: %s\n", msg.IP_dest, msg.message);
-        sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
+    while(strcmp(user.message,"exit") != 0) {
+        printf("Sending to %s: %s\n", user.IP_dest, user.message);
+        sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
         printf("Next message: ");
-        scanf("%s", msg.message);
+        scanf("%s", user.message);
     }
     // sends exit message to end terminate communication
-    sendto(s, &msg, sizeof(msg), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
+    printf("exit____\n");
+    sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
 }
 
