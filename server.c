@@ -12,6 +12,7 @@
 // #include <netdb.h>
 // #include <netinet/in.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 
 #define MAX_LINE 100
@@ -289,48 +290,45 @@ void *config_users(void* i) {
 
     int conf = 0, nread = 0;
     char line[MAX_LINE];
+    conf = accept(fd_tcp,(struct sockaddr *) &serv_config_addr,(socklen_t *)&config_size);
+    printf("to dps do conf\n");
+    while(waitpid(-1,NULL,WNOHANG)>0);
+    if (conf <= 0) return NULL;
+    printf("to dps do segundo conf\n");
     while(1) {
-        //while(waitpid(-1,NULL,WNOHANG)>0);
-
-        conf = accept(fd_tcp,(struct sockaddr *) &serv_config_addr,(socklen_t *)&config_size);
-
-        if (conf > 0) {
-            nread = read(conf, line, MAX_LINE-1);
-            char *tok = strtok(line," ");
-            char *aux2 = strtok(NULL, "\0");
-            if (nread != 0) {
-                line[nread] = 0;
-                printf("Received config: %s", line);
-                // commands TODO
-                if(strcasecmp(line, "list") == 0){
-                    int i;
-                    for(i=0; i < n_users ; i++ ){
-                        printf("User-id => %s\nIP => %s\nPassword => %s\nClient-Server => %c\nP2p => %c\nGrupo => %c\n\n",
-                        users[i].userName,users[i].ip,users[i].password,users[i].client_server,users[i].p2p,users[i].group);
-                    }
-                }
-                else if(strcasecmp(tok,"add") == 0){
-                    get_info(aux2);
-                    write_on_file(aux2);
-                    printf("User added successfully\n");
-                }
-                else if(strcasecmp(tok,"del")){
-                    int x;
-                    if((x=find_username(aux2)) != -1){
-                        for(; x< n_users; x++){
-                            users[x] = users[x+1];
-                        }
-                        n_users --;
-                        remove_from_file(aux2);
-                        printf("User removed\n");
-                    }
-                }
-                else if(strcasecmp(line, "quit")){
-                    close(fdtcp);
+        nread = read(fd_tcp, line, MAX_LINE-1);
+        if(nread == -1)perror("ERROR");
+        printf("to na 299\n");
+        char *tok = strtok(line," ");
+        char *aux2 = strtok(NULL, "\0");
+        if (nread != 0) {
+            line[nread] = 0;
+            printf("Received config: %s", line);
+            // commands TODO
+            if(strcasecmp(line, "list") == 0){
+                int i;
+                for(i=0; i < n_users ; i++ ){
+                    printf("User-id => %s\nIP => %s\nPassword => %s\nClient-Server => %c\nP2p => %c\nGrupo => %c\n\n",
+                    users[i].userName,users[i].ip,users[i].password,users[i].client_server,users[i].p2p,users[i].group);
                 }
             }
-
+            else if(strcasecmp(tok,"add") == 0){
+                get_info(aux2);
+                write_on_file(aux2);
+                printf("User added successfully\n");
+            }
+            else if(strcasecmp(tok,"del")){
+                int x;
+                if((x=find_username(aux2)) != -1){
+                    for(; x< n_users; x++){
+                        users[x] = users[x+1];
+                    }
+                    n_users --;
+                    remove_from_file(aux2);
+                    printf("User removed\n");
+                }
+            }
         }
 
-    }
+      }
 }
