@@ -19,6 +19,7 @@
 #define MAX_LINE 100
 #define MAX_INFO 30
 #define MAX_USERS 50
+#define MAX_REPLY 1024
 
 
 typedef struct user_info{
@@ -62,7 +63,7 @@ void sigint (int sig_num) {
     exit(0);
 }
 
-bool get_info(char *);
+int get_info(char *);
 void load_info();
 void printa(user_info *);
 int find_user(char [], char []);
@@ -176,17 +177,25 @@ int find_user(char userName[MAX_INFO], char password[MAX_INFO]) {
     return 0;
 }
 bool valid_ip(char* ip){
-  int n_p = 0, n_v = 0, i = 0;
-  while(ip[i] != 0){
-    if(ip[i] == '.' && (n_v == 0 || n_v > 3))return false;
-    if (isdigit(ip[i]))n_v++;
-    else if (ip[i] == '.')n_p++, n_v = 0;
-    i++;
-  }
-  return (n_p == 3 && (n_v >= 1 && n_v <= 3));
+    int n_p = 0, n_v = 0, i = 0;
+
+    while(ip[i] != 0){
+        if(ip[i] == '.' && (n_v == 0 || n_v > 3)) return false;
+
+        if (isdigit(ip[i])) n_v++;
+
+        else if (ip[i] == '.') {
+            n_p++; 
+            n_v = 0;
+        }
+
+        i++;
+    }
+
+    return (n_p == 3 && (n_v >= 1 && n_v <= 3));
 }
 
-bool get_info(char *str){
+int get_info(char *str){
     char *tok;
     user_info user;
     int count = 0;
@@ -203,16 +212,16 @@ bool get_info(char *str){
             else if(count == 1) strcpy(user.password,tok);
             else if(count == 2){
                 if((tok[0] != '0' && tok[0] != '1') ||(tok[1] != '0'&&tok[1] != '1')||(tok[2] != '0'&&tok[2]!='1')){
-                  printf("ERRO de formatacao\n");
-                  return false;
+                  printf("ERROR wrong format\n");
+                  return 0;
                 }
                 user.client_server = tok[0] - '0';
                 user.p2p = tok[1] - '0';
                 user.group = tok[2] - '0';
             }
             else{
-              printf("ERRO de formatacao\n");
-              return false;
+              printf("ERROR wrong format\n");
+              return 0;
             }
             count ++;
         }
@@ -220,20 +229,20 @@ bool get_info(char *str){
 
     if(count != 3){
         printf("%d\n", count);
-        printf("ERRO de formatacao\n");
-        return false;
+        printf("ERROR wrong format\n");
+        return 0;
     }else{
         for(int i=0; i< n_users; i++){
             if(strcmp(user.userName,users[i].userName) == 0){
                 printf("Username %s is already in use\n",user.userName);
-                return false;
+                return 0;
             }
         }
         users[n_users] = user;
         n_users++;
     }
-    printf("cabei\n");
-    return true;
+
+    return 1;
 
 }
 
@@ -246,7 +255,7 @@ void load_info(){
     fp = fopen(file_name, "r");
 
     if (fp == NULL)// erro a abrir ficheiro
-        printf("ERRO AO ABRIR FICHEIRO\n");
+        printf("ERRO OPENING FILE\n");
 
     while(fgets(line, MAX_LINE, fp) != NULL) {
             get_info(line);
@@ -277,9 +286,22 @@ int find_username(char name[]){
     }
     return -1;
 }
+
 void trim(char* str){
-      int i = strlen(str)-1;
-      while(isspace(str[i])) str[i--] = 0;
+    int count = 0; 
+    int word = 0;
+
+    for (int i = 0; str[i]; i++) 
+        if (str[i] != ' ') {
+            str[count++] = str[i]; 
+            word = 1;
+        } else if (str[i] == ' ' && word == 1) {
+            str[count++] = str[i];
+            word = 0;
+        }
+
+    if (word == 0) count--;
+    str[count] = '\0'; 
 }
 
 void remove_from_file(char name[]){
@@ -289,31 +311,32 @@ void remove_from_file(char name[]){
     int i = 0;
     char *tok;
     char aux2[MAX_LINE];
+
     fp = fopen(file_name, "r");
     if(fp == NULL){
         printf("ERROR: CANNOT OPEN FILE\n");
         return;
     }
+
     while(fgets(line, MAX_LINE, fp) != NULL){
-        //char *tok = strtok(line,"\n");
-        //while(tok != NULL){
+
         strcpy(aux2,line);
         tok = strtok(aux2, " ");
-        if(strcmp(tok,name)==0){
+        if(strcmp(tok,name) == 0){
             continue;
         }
         strcpy(aux[i],line);
         i++;
         printf("%s\n", aux[i-1]);
-            //tok = strtok(NULL, "\n");
     }
-
     fclose(fp);
+    
     fp = fopen(file_name,"w");
     if(fp == NULL){
         printf("ERROR: CANNOT OPEN FILE\n");
         return;
     }
+
     for(int j =0; j<i;j++){
         fputs(aux[j],fp);
     }
@@ -321,8 +344,8 @@ void remove_from_file(char name[]){
 
 }
 
-bool split(char *input, char *st, char separator){
-    if(input[0] == 0) return false;
+void split(char *input, char *st, char separator){
+    if(input[0] == 0) return;
 
     char string[strlen(input)];
     int i=0,j=0;
@@ -336,61 +359,113 @@ bool split(char *input, char *st, char separator){
 
     string[j] = 0;
     strcpy(input,string);
-    return true;
+}
+
+
+int count_words(char *str) {
+    int count = 0;
+    int state = 0;
+
+    for (int i = 0; i < strlen(str); i++) {
+        if (str[i] == ' ') {
+            state = 0;
+
+        } else if (state == 0 && str[i] != ' ') {
+            state = 1;
+            count++;
+        }
+    }
+
+    return count;
 }
 
 
 void *config_users(void* i) {
     signal(SIGUSR1, sigusr1);
     printf("Thread initialized\n");
+
     char st[MAX_LINE];
     int conf = 0, nread = 0;
     char line[MAX_LINE];
-    conf = accept(fd_tcp,(struct sockaddr *) &serv_config_addr,(socklen_t *)&config_size);
-    //while(waitpid(-1,NULL,WNOHANG)>0);
-    if (conf <= 0) return NULL;
+    char reply[MAX_REPLY];
+    int wc = 0;
+
     while(1) {
-        nread = read(conf, line, MAX_LINE-1);
-        if(nread == -1)perror("ERROR");
-        if (nread != -1) {
-            line[nread] = 0;
-            printf("Received config: %s", line);
-            // commands TODO
-            trim(line);
-            split(line, st, ' ');
-            printf("%s\n", st);
-            if(strcasecmp(st, "list") == 0){
-                int i;
-                for(i=0; i < n_users ; i++ ){
-                    printf("User-id => %s\nIP => %s\nPassword => %s\nClient-Server => %d\nP2p => %d\nGrupo => %d\n\n",
-                    users[i].userName,users[i].ip,users[i].password,users[i].client_server,users[i].p2p,users[i].group);
-                }
-            }
-            else if(strcasecmp(st,"add") == 0){
-                if(!get_info(line)) continue;
-                write_on_file(line);
-                printf("%s\n",line);
-                printf("User added successfully\n");
-            }
-            else if(strcasecmp(st,"del") == 0){
-                int x;
-                if((x=find_username(line)) != -1){
-                    for(; x< n_users; x++){
-                        users[x] = users[x+1];
+        // accept connection, if an error occurs ends thread config
+        conf = accept(fd_tcp,(struct sockaddr *) &serv_config_addr,(socklen_t *)&config_size);
+        if (conf <= 0) return NULL;
+        
+        while(1) {
+            // reads line from socket
+            nread = read(conf, line, MAX_LINE-1);
+
+            if (nread != -1) {
+                line[nread-1] = 0;
+                printf("Received config: %s\n", line);
+                
+                // trim string
+                trim(line);
+
+                // number of words
+                wc = count_words(line);
+
+                // get's first word
+                split(line, st, ' ');
+
+                if (strcmp(st, "QUIT") == 0) {
+                    close(conf);
+                    break;
+
+                } else if(strcmp(st, "LIST") == 0){
+                    for(int i=0; i < n_users ; i++ ){
+                        
+                        sprintf(reply, "User-id => %s\nIP => %s\nPassword => %s\nClient-Server => %d\nP2p => %d\nGrupo => %d\n\n",
+                        users[i].userName,users[i].ip,users[i].password,users[i].client_server,users[i].p2p,users[i].group);
+                        write(conf, reply, 1 + strlen(reply));
                     }
-                    n_users --;
-                    remove_from_file(line);
-                    printf("User removed\n");
+
+                } else if(strcmp(st,"ADD") == 0){
+                    if(wc == 5) {
+                        if(!get_info(line)) continue;
+                        write_on_file(line);
+
+                        sprintf(reply, "User added successfully\n");
+                        write(conf, reply, 1 + strlen(reply));
+
+                    } else {
+                        sprintf(reply, "Wrong format: ADD <User-id> <IP> <Password> <Cliente-Servidor> <P2P> <Grupo> (Ex: ADD test 193.136.212.129 test 110)\n");
+                        write(conf, reply, 1 + strlen(reply));
+                    }
+
+                } else if(strcmp(st,"DEL") == 0){
+                    if(wc == 2) {
+                        int x = find_username(line);
+                        if(x != -1){
+                            for(; x< n_users; x++){
+                                users[x] = users[x+1];
+                            }
+                            n_users --;
+                            remove_from_file(line);
+                            sprintf(reply, "User removed\n");
+
+                        } else{
+                            sprintf(reply, "User not found\n");
+                        }
+                    } else {
+                        sprintf(reply, "Wrong format: DEL <User-id>\n");
+                        
+                    }
+                    write(conf, reply, 1 + strlen(reply));
+
+                } else{
+                    sprintf(reply, "command unknown\n");
+                    write(conf, reply, 1 + strlen(reply));
                 }
-                else{
-                  printf("User not found\n");
-                }
-            }
-            else{
-              printf("COMMAND UNKNOWN\n");
+
+            } else {
+                perror("ERROR");
             }
 
         }
-
-      }
+    }
 }
