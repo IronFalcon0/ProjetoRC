@@ -20,7 +20,7 @@
 #define MAX_TEXT 1024
 
 
-typedef struct user_info{
+typedef struct user_info {
     char behaviour[MAX_INFO];
     char userName[MAX_INFO];
     char ip[MAX_INFO];
@@ -29,8 +29,10 @@ typedef struct user_info{
     char p2p;
     char group;
     char autorized;
-    char IP_dest[MAX_INFO];
+    char userName_dest[MAX_INFO];
     char message[MAX_TEXT];
+    char user_IP[MAX_INFO];
+    int port;
 
 } user_info;
 
@@ -66,6 +68,7 @@ void sigint (int sig_num) {
 
 
 void get_info(char *);
+char *find_user_ip(char []); 
 void load_info(char []);
 void printa(user_info *);
 int find_user(char [], char []);
@@ -73,7 +76,7 @@ void *config_users(void*);
 void autentication();
 void create_connection();
 void client_server();
-void p2p();
+void p2p(int);
 void group_conn();
 
 
@@ -140,8 +143,10 @@ int main(int argc, char** argv){
         if (strcmp(info.behaviour, "autentication") == 0){
             autentication();
 
-        } else if (strcmp(info.behaviour, "send_message") == 0){
+        } else if (strcmp(info.behaviour, "client_server") == 0){
             client_server();
+        } else if (strcmp(info.behaviour, "p2p") == 0){
+            p2p(*argv[1]);
         }
     }
     
@@ -151,19 +156,35 @@ int main(int argc, char** argv){
 
 void client_server() {
     char oldIP[MAX_INFO];
+    char *IP_dest;
+    user_info reply;
+
+    // get client2 ip
+    IP_dest = find_user_ip(info.userName_dest);
+    printf("IP_dest: %s\n", IP_dest);
+
+    if (strcmp(IP_dest, "not found") == 0) {
+        printf("UserName not found, message not delivered: %s\n", info.message);
+
+        strcpy(reply.message, "Message not send");
+        sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+        return;
+    }
+
     inet_ntop(AF_INET, &(serv_addr.sin_addr), oldIP, INET_ADDRSTRLEN);
 
     printf("oldIP: %s\n", oldIP);
-    printf("===%d=\n", inet_pton(AF_INET, info.IP_dest, &(serv_addr.sin_addr)));
+    printf("===%d=\n", inet_pton(AF_INET, IP_dest, &(serv_addr.sin_addr)));
+
     // change ip to client2
-    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, info.IP_dest, &(serv_addr.sin_addr)));
+    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, IP_dest, &(serv_addr.sin_addr)));
 
     if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
 		perror("Error on function bind");
 	}
 
     sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
-    printf("Message successufly send to client with IP: %s! %s\n", info.IP_dest, info.message);
+    printf("Message successufly send to client with IP: %s! %s\n", IP_dest, info.message);
 
     // sets ip back to old
     serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, oldIP, &(serv_addr.sin_addr)));
@@ -172,10 +193,30 @@ void client_server() {
 		perror("Error on function bind");
 	}
 
+    // send confirmation of success
+    strcpy(reply.message, "Message send successufly");
+    sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+
 }
 
 
-void p2p() {
+void p2p( int c_port) {
+    char *IP_dest;
+    user_info dest_info;
+
+    // get client2 ip
+    IP_dest = find_user_ip(info.userName_dest);
+    printf("IP_dest: %s\n", IP_dest);
+
+    if (strcmp(IP_dest, "not found") == 0) {
+        printf("UserName not found, message not delivered: %s\n", info.message);
+        return;
+    }
+    // gets client info
+    strcpy(dest_info.user_IP, IP_dest);
+    dest_info.port = c_port;
+
+    sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
 
 }
 
@@ -215,6 +256,28 @@ int find_user(char userName[MAX_INFO], char password[MAX_INFO]) {
     return -1;
 }
 
+
+char *find_user_ip(char userName[MAX_INFO]) {
+    for (int i = 0; i < n_users; i++) {
+        if (strcmp(userName, users[i].userName) == 0) {
+            return users[i].ip;
+        }
+    }
+    return "not found";
+
+}
+
+
+int find_user_port(char userName[MAX_INFO]) {
+    for (int i = 0; i < n_users; i++) {
+        if (strcmp(userName, users[i].userName) == 0) {
+            //return users[i].port;
+            return 1;
+        }
+    }
+    return -1;
+
+}
 
 void get_info(char *str){
     char *tok;

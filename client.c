@@ -20,8 +20,10 @@ typedef struct user_info {
     char p2p;
     char group;
     char autorized;
-    char IP_dest[MAX_INFO];
+    char userName_dest[MAX_INFO];
     char message[MAX_TEXT];
+    char user_IP[MAX_INFO];
+    int port;
 
 } user_info;
 
@@ -119,10 +121,11 @@ int main(int argc, char** argv) {
         }
         
         if (type == 1 && user.client_server == 1) {
-            strcpy(user.behaviour, "send_message");
+            strcpy(user.behaviour, "client_server");
             client_server();
         } else if (type == 2 && user.p2p == 1) {
-            p2p();
+            strcpy(user.behaviour, "p2p");
+            p2p(argv[2]);
         } else if (type == 3 && user.group == 1) {
             group();
         } else {
@@ -134,13 +137,14 @@ int main(int argc, char** argv) {
 }
 
 void *messages_incoming() {
+    user_info reply;
     signal(SIGUSR1, sigusr1);
     // change user struct, crete new
     while(1) {
-        if((reply_server = recvfrom(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
+        if((reply_server = recvfrom(s, &reply, sizeof(reply), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	    }
-        printf("Message received: %s %s len(%d)!\n", user.userName, user.message, strlen(user.message));
+        printf("Message received: %s %s len(%ld)!\n", reply.userName, reply.message, strlen(reply.message));
     }
 }
 
@@ -148,19 +152,28 @@ void *messages_incoming() {
 
 void client_server() {
 
-    printf("IP destination: ");
-    scanf("%s", &user.IP_dest);
+    printf("Destination UserName: ");
+    scanf("%s", user.userName_dest);
     printf("Message: ");
-    scanf("%s", &user.message);
+    scanf("%s", user.message);
 
 
-    printf("Sending to %s: %s\n", user.IP_dest, user.message);
+    printf("Sending to %s: %s\n", user.userName_dest, user.message);
     sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
 }
 
 
-void p2p() {
+void p2p(int c_port) {
+    user_info c_info;
+
+    if((reply_server = recvfrom(s, &c_info, sizeof(c_info), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
+	        perror("Error on recvfrom");
+	}
+
+    serv_addr.sin_port = htons(c_info.port);
+    inet_pton(AF_INET, c_info.user_IP, &(serv_addr.sin_addr));
+
 
 }
 
