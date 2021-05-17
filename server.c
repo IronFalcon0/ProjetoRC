@@ -93,20 +93,17 @@ int main(int argc, char** argv){
     serv_config_addr.sin_port = htons(atoi(argv[2]));
 
     if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-    printf("oi\n");
 		perror("na funcao socket");
     exit(0);
     }
 
     if ( bind(fd_tcp, (struct sockaddr*) &serv_config_addr,sizeof(serv_config_addr)) < 0){
-    printf("ola\n");
 		perror("na funcao bind");
     exit(0);
     }
 
     // wait for connections
     if( listen(fd_tcp, 5) < 0){
-    printf("vadia\n");
 		perror("na funcao listen");
     exit(0);
     }
@@ -350,15 +347,11 @@ void *config_users(void* i) {
     int conf = 0, nread = 0;
     char line[MAX_LINE];
     conf = accept(fd_tcp,(struct sockaddr *) &serv_config_addr,(socklen_t *)&config_size);
-    printf("to dps do conf\n");
     //while(waitpid(-1,NULL,WNOHANG)>0);
     if (conf <= 0) return NULL;
-    printf("to dps do segundo conf\n");
     while(1) {
         nread = read(conf, line, MAX_LINE-1);
-        printf("cacete\n");
         if(nread == -1)perror("ERROR");
-        printf("to na 299\n");
         if (nread != -1) {
             line[nread] = 0;
             printf("Received config: %s", line);
@@ -374,7 +367,6 @@ void *config_users(void* i) {
                 }
             }
             else if(strcasecmp(st,"add") == 0){
-                printf("bila bilu\n");
                 if(!get_info(line)) continue;
                 write_on_file(line);
                 printf("%s\n",line);
