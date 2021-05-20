@@ -19,10 +19,11 @@
 #define MAX_LINE 100
 #define MAX_INFO 30
 #define MAX_USERS 50
-#define MAX_REPLY 1024
+#define MAX_TEXT 1024
 
 
-typedef struct user_info{
+typedef struct user_info {
+    char behaviour[MAX_INFO];
     char userName[MAX_INFO];
     char ip[MAX_INFO];
     char password[MAX_INFO];
@@ -30,19 +31,22 @@ typedef struct user_info{
     char p2p;
     char group;
     char autorized;
+    char userName_dest[MAX_INFO];
+    char message[MAX_TEXT];
+    char user_IP[MAX_INFO];
+    int port;
 
 } user_info;
 
 char file_name[MAX_LINE];
 user_info users[MAX_USERS];
-int users_ids[MAX_USERS];   // current users connected
 int n_users = 0;
 int fd_tcp;
-char signal_exit = 0;
 
-struct sockaddr_in serv_clients_addr, serv_config_addr, clients_addr;
+struct sockaddr_in serv_addr, serv_config_addr, clients_addr;
 socklen_t clients_len = sizeof(clients_addr);
-int s_clients, recv_len, config_size;
+socklen_t config_size = sizeof(serv_config_addr);
+int s_clients, recv_len;
 user_info info;
 
 pthread_t config_thread;
@@ -51,6 +55,7 @@ pthread_t config_thread;
 void sigusr1(int sig_num) {
     pthread_exit(NULL);
 }
+
 
 void sigint (int sig_num) {
     //close TCP connection
@@ -63,12 +68,18 @@ void sigint (int sig_num) {
     exit(0);
 }
 
+
 int get_info(char *);
+char *find_user_ip(char []); 
 void load_info();
 void printa(user_info *);
 int find_user(char [], char []);
 void *config_users(void*);
 void autentication();
+void create_connection();
+void client_server();
+void p2p(int);
+void group_conn();
 
 
 int main(int argc, char** argv){
@@ -77,14 +88,13 @@ int main(int argc, char** argv){
 
     signal(SIGINT, sigint);
 
-
     if (argc != 4) {
         printf("server <port clients> <port config> <log file>\n");
         exit(-1);
     }
 
+    // load user info from log file
     load_info(argv[3]);
-    printa(users);
 
     // initialize TCP connection
     bzero((void *) &serv_config_addr, sizeof(serv_config_addr));
@@ -93,88 +103,171 @@ int main(int argc, char** argv){
     //serv_config_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_config_addr.sin_port = htons(atoi(argv[2]));
 
-    if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-		perror("na funcao socket");
-    exit(0);
+    if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		perror("Error on function socket");
+        exit(0);
     }
 
-    if ( bind(fd_tcp, (struct sockaddr*) &serv_config_addr,sizeof(serv_config_addr)) < 0){
-		perror("na funcao bind");
-    exit(0);
+    if (bind(fd_tcp, (struct sockaddr*) &serv_config_addr,sizeof(serv_config_addr)) < 0) {
+		perror("Error on function bind");
+        exit(0);
     }
 
     // wait for connections
-    if( listen(fd_tcp, 5) < 0){
-		perror("na funcao listen");
-    exit(0);
+    if(listen(fd_tcp, 5) < 0) {
+		perror("Error on function listen");
+        exit(0);
     }
 
-    // create thread to handle with config users
+    // create thread to handle config users
     pthread_create(&config_thread, NULL, config_users, NULL);
 
 
-    // initialize UDP connection and verification
-    // socket to receive UDP packages from clients
+    // initialize UDP connection
 	if ((s_clients = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-		perror("Erro na criação do socket");
-    exit(0);
+		perror("Error creating socket");
+        exit(0);
 	}
 
-	serv_clients_addr.sin_family = AF_INET;
-	serv_clients_addr.sin_port = htons(atoi(argv[1]));
-    serv_clients_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(atoi(argv[1]));
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
+    // clients_addr.sin_port = htons(atoi(argv[1]));  // don't know if needed?!
 
-    // bind socket
-	if (bind(s_clients, (struct sockaddr*)&serv_clients_addr, sizeof(serv_clients_addr)) == -1) {
-		perror("Erro no bind");
-    exit(0);
+	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
+		perror("Error on function bind");
+        exit(0);
 	}
 
 
     // print server info
     char server_addr[30];
-	  inet_ntop(AF_INET, &(serv_clients_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
-    printf("server address: %s\n UDP port: %d\n TCP port: %d\n", inet_ntoa(serv_config_addr.sin_addr), ntohs(serv_clients_addr.sin_port), ntohs(serv_config_addr.sin_port));
-
-
-    // clients autentication
+	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
+    printf("Server address: %s == UDP port: %d == TCP port: %d == Clients_port: %d\n", server_addr, ntohs(serv_addr.sin_port), ntohs(serv_config_addr.sin_port), ntohs(clients_addr.sin_port));
+    
+    // receive info from clients and responds accordingly
     while(1) {
-        autentication();
+        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
+            perror("Error on recvfrom");
+        }
 
+        printf("IP: %s === Port: %d\n", inet_ntoa(clients_addr.sin_addr), ntohs(clients_addr.sin_port));
+
+        if (strcmp(info.behaviour, "autentication") == 0){
+            autentication();
+
+        } else if (strcmp(info.behaviour, "client_server") == 0){
+            client_server();
+        } else if (strcmp(info.behaviour, "p2p") == 0){
+            p2p(*argv[1]);
+        }
     }
 
 
     return 0;
 }
 
-void autentication() {
-    if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
-	        perror("Erro no recvfrom");
+
+void client_server() {
+    char oldIP[MAX_INFO];
+    char *IP_dest;
+    user_info reply;
+
+    // get client2 ip
+    IP_dest = find_user_ip(info.userName_dest);
+    printf("IP_dest: %s\n", IP_dest);
+
+    if (strcmp(IP_dest, "not found") == 0) {
+        printf("UserName not found, message not delivered: %s\n", info.message);
+
+        strcpy(reply.message, "Message not send");
+        sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+        return;
     }
+
+    inet_ntop(AF_INET, &(serv_addr.sin_addr), oldIP, INET_ADDRSTRLEN);
+
+    printf("oldIP: %s\n", oldIP);
+    printf("===%d=\n", inet_pton(AF_INET, IP_dest, &(serv_addr.sin_addr)));
+
+    // change ip to client2
+    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, IP_dest, &(serv_addr.sin_addr)));
+
+    if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
+		perror("Error on function bind");
+	}
+
+    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+    printf("Message successufly send to client with IP: %s! %s\n", IP_dest, info.message);
+
+    // sets ip back to old
+    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, oldIP, &(serv_addr.sin_addr)));
+
+    if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
+		perror("Error on function bind");
+	}
+
+    // send confirmation of success
+    strcpy(reply.message, "Message send successufly");
+    sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+
+}
+
+
+void p2p( int c_port) {
+    char *IP_dest;
+    user_info dest_info;
+
+    // get client2 ip
+    IP_dest = find_user_ip(info.userName_dest);
+    printf("IP_dest: %s\n", IP_dest);
+
+    if (strcmp(IP_dest, "not found") == 0) {
+        printf("UserName not found, message not delivered: %s\n", info.message);
+        return;
+    }
+    // gets client info
+    strcpy(dest_info.user_IP, IP_dest);
+    dest_info.port = c_port;
+
+    sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+
+}
+
+
+void group_conn() {
+
+}
+
+
+void autentication() {
     printf("New user received\n");
 
     // check info
-    if (find_user(info.userName, info.password) == 1) {
+    int user_index = find_user(info.userName, info.password);
+    if (user_index != -1) {
         info.autorized = 1;
+        info.client_server = users[user_index].client_server;
+        info.p2p =  users[user_index].p2p;
+        info.group =  users[user_index].group;
 
-        sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
         printf("User autenticated\n");
+
     } else {
         info.autorized = 0;
-
-        sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
         printf("User not autenticated\n");
     }
+    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
 }
 
 
 int find_user(char userName[MAX_INFO], char password[MAX_INFO]) {
     for (int i = 0; i< n_users; i++) {
         if (strcmp(userName, users[i].userName) == 0 && strcmp(password, users[i].password) == 0) {
-                return 1;
+                return i;
         }
     }
-    return 0;
+    return -1;
 }
 bool valid_ip(char* ip){
     int n_p = 0, n_v = 0, i = 0;
@@ -194,6 +287,29 @@ bool valid_ip(char* ip){
 
     return (n_p == 3 && (n_v >= 1 && n_v <= 3));
 }
+
+char *find_user_ip(char userName[MAX_INFO]) {
+    for (int i = 0; i < n_users; i++) {
+        if (strcmp(userName, users[i].userName) == 0) {
+            return users[i].ip;
+        }
+    }
+    return "not found";
+
+}
+
+
+int find_user_port(char userName[MAX_INFO]) {
+    for (int i = 0; i < n_users; i++) {
+        if (strcmp(userName, users[i].userName) == 0) {
+            //return users[i].port;
+            return 1;
+        }
+    }
+    return -1;
+
+}
+
 
 int get_info(char *str){
     char *tok;
@@ -231,6 +347,7 @@ int get_info(char *str){
         printf("%d\n", count);
         printf("ERROR wrong format\n");
         return 0;
+        
     }else{
         for(int i=0; i< n_users; i++){
             if(strcmp(user.userName,users[i].userName) == 0){
@@ -250,17 +367,17 @@ int get_info(char *str){
 void load_info(){
     char line[MAX_LINE];
     FILE *fp;
-
-    //int i = 0;
+    
     fp = fopen(file_name, "r");
 
-    if (fp == NULL)// erro a abrir ficheiro
-        printf("ERRO OPENING FILE\n");
+    if (fp == NULL)
+        printf("Error opening file %s\n", file_name);
 
     while(fgets(line, MAX_LINE, fp) != NULL) {
             get_info(line);
             printf("%s\n", line);
     }
+    
     fclose(fp);
 }
 
@@ -387,7 +504,7 @@ void *config_users(void* i) {
     char st[MAX_LINE];
     int conf = 0, nread = 0;
     char line[MAX_LINE];
-    char reply[MAX_REPLY];
+    char reply[MAX_TEXT];
     int wc = 0;
 
     while(1) {
