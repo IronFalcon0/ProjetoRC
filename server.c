@@ -34,7 +34,6 @@ typedef struct user_info {
     char userName_dest[MAX_INFO];
     char message[MAX_TEXT];
     char user_IP[MAX_INFO];
-    int port;
 
 } user_info;
 
@@ -43,8 +42,9 @@ user_info users[MAX_USERS];
 int n_users = 0;
 int fd_tcp;
 
-struct sockaddr_in serv_addr, serv_config_addr, clients_addr;
-socklen_t clients_len = sizeof(clients_addr);
+struct sockaddr_in serv_addr, client_addr, serv_config_addr;
+socklen_t serv_len = sizeof(serv_addr);
+socklen_t client_len = sizeof(client_addr);
 socklen_t config_size = sizeof(serv_config_addr);
 int s_clients, recv_len;
 user_info info;
@@ -52,17 +52,12 @@ user_info info;
 pthread_t config_thread;
 
 
-void sigusr1(int sig_num) {
-    pthread_exit(NULL);
-}
-
-
 void sigint (int sig_num) {
     //close TCP connection
     close(fd_tcp);
 
     //kill thread
-    pthread_kill(config_thread, SIGUSR1);
+    pthread_cancel(config_thread);
     printf("Thread killed\n");
 
     exit(0);
@@ -78,7 +73,7 @@ void *config_users(void*);
 void autentication();
 void create_connection();
 void client_server();
-void p2p(int);
+void p2p();
 void group_conn();
 
 
@@ -122,7 +117,6 @@ int main(int argc, char** argv){
     // create thread to handle config users
     pthread_create(&config_thread, NULL, config_users, NULL);
 
-
     // initialize UDP connection
 	if ((s_clients = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
 		perror("Error creating socket");
@@ -132,7 +126,7 @@ int main(int argc, char** argv){
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(atoi(argv[1]));
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
-    // clients_addr.sin_port = htons(atoi(argv[1]));  // don't know if needed?!
+    
 
 	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
 		perror("Error on function bind");
@@ -141,25 +135,25 @@ int main(int argc, char** argv){
 
 
     // print server info
-    char server_addr[30];
-	inet_ntop(AF_INET, &(serv_addr.sin_addr), server_addr, INET_ADDRSTRLEN);
-    printf("Server address: %s == UDP port: %d == TCP port: %d == Clients_port: %d\n", server_addr, ntohs(serv_addr.sin_port), ntohs(serv_config_addr.sin_port), ntohs(clients_addr.sin_port));
+    printf("Server address: %s == UDP port: %d == TCP port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port), ntohs(serv_config_addr.sin_port));
     
     // receive info from clients and responds accordingly
     while(1) {
-        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t *)&clients_len)) == -1) {
+        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t *) &client_len)) == -1) {
             perror("Error on recvfrom");
         }
 
-        printf("IP: %s === Port: %d\n", inet_ntoa(clients_addr.sin_addr), ntohs(clients_addr.sin_port));
+        printf("Server IP: %s === Port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
+        printf("Client IP: %s === Port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         if (strcmp(info.behaviour, "autentication") == 0){
             autentication();
 
         } else if (strcmp(info.behaviour, "client_server") == 0){
             client_server();
+
         } else if (strcmp(info.behaviour, "p2p") == 0){
-            p2p(*argv[1]);
+            p2p();
         }
     }
 
@@ -181,40 +175,35 @@ void client_server() {
         printf("UserName not found, message not delivered: %s\n", info.message);
 
         strcpy(reply.message, "Message not send");
-        sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+        sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
         return;
     }
 
-    inet_ntop(AF_INET, &(serv_addr.sin_addr), oldIP, INET_ADDRSTRLEN);
 
+    inet_ntop(AF_INET, &(client_addr.sin_addr), oldIP, INET_ADDRSTRLEN);
     printf("oldIP: %s\n", oldIP);
-    printf("===%d=\n", inet_pton(AF_INET, IP_dest, &(serv_addr.sin_addr)));
 
     // change ip to client2
-    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, IP_dest, &(serv_addr.sin_addr)));
+    inet_pton(AF_INET, IP_dest, &(client_addr.sin_addr));
+    printf("Server address2: %s\n", inet_ntoa(client_addr.sin_addr));
 
-    if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
-		perror("Error on function bind");
-	}
-
-    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+    // sends message to client2
+    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
     printf("Message successufly send to client with IP: %s! %s\n", IP_dest, info.message);
 
     // sets ip back to old
-    serv_addr.sin_addr.s_addr = htonl(inet_pton(AF_INET, oldIP, &(serv_addr.sin_addr)));
+    inet_pton(AF_INET, oldIP, &(client_addr.sin_addr));
+    printf("Server address3: %s\n", inet_ntoa(client_addr.sin_addr));
 
-    if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
-		perror("Error on function bind");
-	}
 
     // send confirmation of success
     strcpy(reply.message, "Message send successufly");
-    sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+    sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
 
 }
 
 
-void p2p( int c_port) {
+void p2p() {
     char *IP_dest;
     user_info dest_info;
 
@@ -222,15 +211,17 @@ void p2p( int c_port) {
     IP_dest = find_user_ip(info.userName_dest);
     printf("IP_dest: %s\n", IP_dest);
 
-    if (strcmp(IP_dest, "not found") == 0) {
-        printf("UserName not found, message not delivered: %s\n", info.message);
-        return;
-    }
-    // gets client info
-    strcpy(dest_info.user_IP, IP_dest);
-    dest_info.port = c_port;
+    strcpy(info.behaviour, "info");
 
-    sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+    if (strcmp(IP_dest, "not found") == 0) {
+        strcpy(dest_info.user_IP, "not found");
+        
+    } else {
+        // gets client info
+        strcpy(dest_info.user_IP, IP_dest);
+    }
+
+    sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
 
 }
 
@@ -257,7 +248,7 @@ void autentication() {
         info.autorized = 0;
         printf("User not autenticated\n");
     }
-    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &clients_addr, (socklen_t ) clients_len);
+    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
 }
 
 
@@ -269,6 +260,8 @@ int find_user(char userName[MAX_INFO], char password[MAX_INFO]) {
     }
     return -1;
 }
+
+
 bool valid_ip(char* ip){
     int n_p = 0, n_v = 0, i = 0;
 
@@ -288,6 +281,7 @@ bool valid_ip(char* ip){
     return (n_p == 3 && (n_v >= 1 && n_v <= 3));
 }
 
+
 char *find_user_ip(char userName[MAX_INFO]) {
     for (int i = 0; i < n_users; i++) {
         if (strcmp(userName, users[i].userName) == 0) {
@@ -295,18 +289,6 @@ char *find_user_ip(char userName[MAX_INFO]) {
         }
     }
     return "not found";
-
-}
-
-
-int find_user_port(char userName[MAX_INFO]) {
-    for (int i = 0; i < n_users; i++) {
-        if (strcmp(userName, users[i].userName) == 0) {
-            //return users[i].port;
-            return 1;
-        }
-    }
-    return -1;
 
 }
 
@@ -389,6 +371,7 @@ void printa(user_info *arr){
     }
 }
 
+
 void write_on_file(char *str){
     FILE *fp;
     fp = fopen(file_name,"a");
@@ -397,12 +380,14 @@ void write_on_file(char *str){
     fclose(fp);
 }
 
+
 int find_username(char name[]){
     for (int i = 0; i< n_users; i++) {
         if (strcmp(name, users[i].userName) == 0) return i;
     }
     return -1;
 }
+
 
 void trim(char* str){
     int count = 0; 
@@ -420,6 +405,7 @@ void trim(char* str){
     if (word == 0) count--;
     str[count] = '\0'; 
 }
+
 
 void remove_from_file(char name[]){
     char aux[n_users][MAX_LINE];
@@ -461,6 +447,7 @@ void remove_from_file(char name[]){
 
 }
 
+
 void split(char *input, char *st, char separator){
     if(input[0] == 0) return;
 
@@ -498,7 +485,6 @@ int count_words(char *str) {
 
 
 void *config_users(void* i) {
-    signal(SIGUSR1, sigusr1);
     printf("Thread initialized\n");
 
     char st[MAX_LINE];
@@ -536,7 +522,7 @@ void *config_users(void* i) {
                 } else if(strcmp(st, "LIST") == 0){
                     for(int i=0; i < n_users ; i++ ){
                         
-                        sprintf(reply, "User-id => %s\nIP => %s\nPassword => %s\nClient-Server => %d\nP2p => %d\nGrupo => %d\n\n",
+                        sprintf(reply, "UserName => %s\nIP => %s\nPassword => %s\nClient-Server => %d\nP2p => %d\nGrupo => %d\n\n",
                         users[i].userName,users[i].ip,users[i].password,users[i].client_server,users[i].p2p,users[i].group);
                         write(conf, reply, 1 + strlen(reply));
                     }
@@ -550,7 +536,7 @@ void *config_users(void* i) {
                         write(conf, reply, 1 + strlen(reply));
 
                     } else {
-                        sprintf(reply, "Wrong format: ADD <User-id> <IP> <Password> <Cliente-Servidor> <P2P> <Grupo> (Ex: ADD test 193.136.212.129 test 110)\n");
+                        sprintf(reply, "Wrong format: ADD <UserName> <IP> <Password> <Cliente-Servidor> <P2P> <Grupo> (Ex: ADD test 193.136.212.129 test 110)\n");
                         write(conf, reply, 1 + strlen(reply));
                     }
 

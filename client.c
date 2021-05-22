@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <pthread.h>
 #include <signal.h>
+#include <semaphore.h>
 
 #define MAX_LINE 100
 #define MAX_INFO 30
@@ -33,6 +34,7 @@ socklen_t slen = sizeof(serv_addr);
 int s, reply_server;
 user_info user;
 pthread_t msg_thread;
+pthread_mutex_t mutex_listen = PTHREAD_MUTEX_INITIALIZER;
 
 void *messages_incoming();
 void client_server();
@@ -40,14 +42,9 @@ void p2p();
 void group();
 
 
-void sigusr1(int sig_num) {
-    pthread_exit(NULL);
-}
-
-
 void sigint (int sig_num) {
     //kill thread
-    pthread_kill(msg_thread, SIGUSR1);
+    pthread_cancel(msg_thread);
     printf("Thread killed\n");
 
     exit(0);
@@ -71,6 +68,8 @@ int main(int argc, char** argv) {
 	serv_addr.sin_port = htons(atoi(argv[2]));
     inet_pton(AF_INET, argv[1], &(serv_addr.sin_addr));
     //serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+
+    printf("Client address: %s == UDP port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
 
     // ask user info
     printf("Username: ");
@@ -104,6 +103,7 @@ int main(int argc, char** argv) {
         exit(0);
     }
 
+
     printf("Login with success\n");
 
     signal(SIGINT, sigint);
@@ -111,14 +111,12 @@ int main(int argc, char** argv) {
     // creates thread to receive messages
     pthread_create(&msg_thread, NULL, messages_incoming, NULL);
 
+    char s_type[3];
     int type = 0;
     while(1) {
-        printf("Types of connections allowed:\n\t1 - client-server: %d\n\t2 - P2P: %d\n\t3 - group connection: %d\n", user.client_server, user.p2p, user.group);
-        scanf("%d", &type);
-
-        while(type < 0 && type > 3) {
-            scanf("%d", &type);
-        }
+        printf("\nTypes of connections allowed:\n\t1 - client-server: %d\n\t2 - P2P: %d\n\t3 - group connection: %d\n", user.client_server, user.p2p, user.group);
+        fgets(s_type, sizeof(s_type), stdin);
+        type = atoi(s_type);
         
         if (type == 1 && user.client_server == 1) {
             strcpy(user.behaviour, "client_server");
@@ -138,8 +136,8 @@ int main(int argc, char** argv) {
 
 void *messages_incoming() {
     user_info reply;
-    signal(SIGUSR1, sigusr1);
-    // change user struct, crete new
+
+    printf("listening\n");
     while(1) {
         if((reply_server = recvfrom(s, &reply, sizeof(reply), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
@@ -153,27 +151,60 @@ void *messages_incoming() {
 void client_server() {
 
     printf("Destination UserName: ");
-    scanf("%s", user.userName_dest);
+    fgets(user.userName_dest, sizeof(user.userName_dest), stdin);
+    user.userName_dest[strlen(user.userName_dest)-1] = 0;
+
     printf("Message: ");
-    scanf("%s", user.message);
+    fgets(user.message, sizeof(user.message), stdin);
+    user.message[strlen(user.message)-1] = 0;
 
-
-    printf("Sending to %s: %s\n", user.userName_dest, user.message);
     sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
 }
 
 
 void p2p(int c_port) {
+    struct sockaddr_in client2_addr = serv_addr;
+    socklen_t client_len = sizeof(client2_addr);
     user_info c_info;
 
+    printf("Destination UserName: ");
+    // scanf("%s", user.userName_dest);
+    fgets(user.userName_dest, sizeof(user.userName_dest), stdin);
+    user.userName_dest[strlen(user.userName_dest)-1] = 0;
+    
+    // mutex lock to block thread from receiving message
+    pthread_mutex_lock(&mutex_listen);
+
+    // sends UserName of destination
+    printf("Sending to %s\n", user.userName_dest);
+    sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
+
+    // receives from server IP of destination
     if((reply_server = recvfrom(s, &c_info, sizeof(c_info), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	}
 
-    serv_addr.sin_port = htons(c_info.port);
-    inet_pton(AF_INET, c_info.user_IP, &(serv_addr.sin_addr));
+    pthread_mutex_unlock(&mutex_listen);
+    printf("IP dest: %s\n", c_info.user_IP);
 
+    if (strcmp(c_info.user_IP, "not found") == 0){
+        printf("User IP not found\n");
+        return;
+    }
+
+    // changes IP to client2
+    inet_pton(AF_INET, c_info.user_IP ,&(client2_addr.sin_addr));
+
+    // gets message
+    printf("Message: ");
+    fgets(user.message, sizeof(user.message), stdin);
+    user.message[strlen(user.message)-1] = 0;
+
+    // sends message to client2
+    sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &client2_addr, (socklen_t ) client_len);
+    printf("Message send successufly\n");
+    
 
 }
 
