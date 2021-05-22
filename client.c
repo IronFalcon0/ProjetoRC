@@ -13,7 +13,7 @@
 
 
 typedef struct user_info {
-    char behaviour[MAX_INFO];
+    char behavior[MAX_INFO];
     char userName[MAX_INFO];
     char ip[MAX_INFO];
     char password[MAX_INFO];
@@ -24,9 +24,13 @@ typedef struct user_info {
     char userName_dest[MAX_INFO];
     char message[MAX_TEXT];
     char user_IP[MAX_INFO];
-    int port;
 
 } user_info;
+
+typedef struct msg_t {
+    char userName[MAX_INFO];
+    char message[MAX_TEXT];
+} msg_t;
 
 
 struct sockaddr_in serv_addr;
@@ -91,13 +95,13 @@ int main(int argc, char** argv) {
     }
 
     printf("Information send to server\n");
-    strcpy(user.behaviour, "autentication");
+    strcpy(user.behavior, "autentication");
     sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
     if((reply_server = recvfrom(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	}
-    printf("%d\n", user.client_server);
+    
     if (user.autorized == 0) {
         printf("Login without success\n");
         exit(0);
@@ -119,11 +123,13 @@ int main(int argc, char** argv) {
         type = atoi(s_type);
         
         if (type == 1 && user.client_server == 1) {
-            strcpy(user.behaviour, "client_server");
+            strcpy(user.behavior, "client_server");
             client_server();
+
         } else if (type == 2 && user.p2p == 1) {
-            strcpy(user.behaviour, "p2p");
-            p2p(argv[2]);
+            strcpy(user.behavior, "p2p");
+            p2p();
+
         } else if (type == 3 && user.group == 1) {
             group();
         } else {
@@ -135,14 +141,15 @@ int main(int argc, char** argv) {
 }
 
 void *messages_incoming() {
-    user_info reply;
+    msg_t reply;
 
-    printf("listening\n");
     while(1) {
         if((reply_server = recvfrom(s, &reply, sizeof(reply), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	    }
-        printf("Message received: %s %s len(%ld)!\n", reply.userName, reply.message, strlen(reply.message));
+
+        printf("Message received from %s: %s\n", reply.userName , reply.message);  // %s len(%ld)!    reply.userName, , strlen(reply.message)
+
     }
 }
 
@@ -163,18 +170,20 @@ void client_server() {
 }
 
 
-void p2p(int c_port) {
-    struct sockaddr_in client2_addr = serv_addr;
+void p2p() {
+    struct sockaddr_in client2_addr;
     socklen_t client_len = sizeof(client2_addr);
     user_info c_info;
+    msg_t message_t;
+
+    // stops client from receiving messages
+    pthread_cancel(msg_thread);
 
     printf("Destination UserName: ");
-    // scanf("%s", user.userName_dest);
     fgets(user.userName_dest, sizeof(user.userName_dest), stdin);
     user.userName_dest[strlen(user.userName_dest)-1] = 0;
     
     // mutex lock to block thread from receiving message
-    pthread_mutex_lock(&mutex_listen);
 
     // sends UserName of destination
     printf("Sending to %s\n", user.userName_dest);
@@ -185,7 +194,10 @@ void p2p(int c_port) {
 	        perror("Error on recvfrom");
 	}
 
-    pthread_mutex_unlock(&mutex_listen);
+    // alows client to receive messages
+    pthread_create(&msg_thread, NULL, messages_incoming, NULL);
+
+
     printf("IP dest: %s\n", c_info.user_IP);
 
     if (strcmp(c_info.user_IP, "not found") == 0){
@@ -194,21 +206,37 @@ void p2p(int c_port) {
     }
 
     // changes IP to client2
-    inet_pton(AF_INET, c_info.user_IP ,&(client2_addr.sin_addr));
+    char IP[100];
+    strcpy(IP, c_info.user_IP);
+    printf("%s\n", IP);
+    client2_addr.sin_family = AF_INET;
+    client2_addr.sin_port = serv_addr.sin_port;
+    inet_pton(AF_INET, IP ,&(client2_addr.sin_addr));
 
     // gets message
+    char message[1024];
     printf("Message: ");
-    fgets(user.message, sizeof(user.message), stdin);
-    user.message[strlen(user.message)-1] = 0;
+    fgets(message, sizeof(message), stdin);
+    message[strlen(message)-1] = 0;
+
+    strcpy(message_t.userName, user.userName);
+    strcpy(message_t.message, message);
+
+    printf("Mess== %s !!! %s ;\n", message_t.message, message_t.userName);
 
     // sends message to client2
-    sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &client2_addr, (socklen_t ) client_len);
-    printf("Message send successufly\n");
+    sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client2_addr, (socklen_t ) client_len);
     
 
 }
 
 
 void group() {
+
+    pthread_cancel(msg_thread);
+
+
+
+    pthread_create(&msg_thread, NULL, messages_incoming, NULL);
 
 }

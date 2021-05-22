@@ -23,7 +23,7 @@
 
 
 typedef struct user_info {
-    char behaviour[MAX_INFO];
+    char behavior[MAX_INFO];
     char userName[MAX_INFO];
     char ip[MAX_INFO];
     char password[MAX_INFO];
@@ -36,6 +36,12 @@ typedef struct user_info {
     char user_IP[MAX_INFO];
 
 } user_info;
+
+
+typedef struct msg_t {
+    char userName[MAX_INFO];
+    char message[MAX_TEXT];
+} msg_t;
 
 char file_name[MAX_LINE];
 user_info users[MAX_USERS];
@@ -126,7 +132,7 @@ int main(int argc, char** argv){
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(atoi(argv[1]));
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
-    
+
 
 	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
 		perror("Error on function bind");
@@ -146,13 +152,13 @@ int main(int argc, char** argv){
         printf("Server IP: %s === Port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
         printf("Client IP: %s === Port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        if (strcmp(info.behaviour, "autentication") == 0){
+        if (strcmp(info.behavior, "autentication") == 0){
             autentication();
 
-        } else if (strcmp(info.behaviour, "client_server") == 0){
+        } else if (strcmp(info.behavior, "client_server") == 0){
             client_server();
 
-        } else if (strcmp(info.behaviour, "p2p") == 0){
+        } else if (strcmp(info.behavior, "p2p") == 0){
             p2p();
         }
     }
@@ -165,17 +171,20 @@ int main(int argc, char** argv){
 void client_server() {
     char oldIP[MAX_INFO];
     char *IP_dest;
-    user_info reply;
+    msg_t message_t;
+
+    strcpy(message_t.userName, info.userName);
+    strcpy(message_t.message, info.message);
 
     // get client2 ip
     IP_dest = find_user_ip(info.userName_dest);
     printf("IP_dest: %s\n", IP_dest);
 
     if (strcmp(IP_dest, "not found") == 0) {
-        printf("UserName not found, message not delivered: %s\n", info.message);
+        printf("UserName not found, message not delivered: %s\n", message_t.message);
 
-        strcpy(reply.message, "Message not send");
-        sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
+        strcpy(message_t.message, "Message not send");
+        sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
         return;
     }
 
@@ -188,8 +197,8 @@ void client_server() {
     printf("Server address2: %s\n", inet_ntoa(client_addr.sin_addr));
 
     // sends message to client2
-    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
-    printf("Message successufly send to client with IP: %s! %s\n", IP_dest, info.message);
+    sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
+    printf("Message successufly send to client with IP: %s! %s\n", IP_dest, message_t.message);
 
     // sets ip back to old
     inet_pton(AF_INET, oldIP, &(client_addr.sin_addr));
@@ -197,8 +206,8 @@ void client_server() {
 
 
     // send confirmation of success
-    strcpy(reply.message, "Message send successufly");
-    sendto(s_clients, &reply, sizeof(reply), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
+    strcpy(message_t.message, "Message send successufly");
+    sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
 
 }
 
@@ -211,8 +220,6 @@ void p2p() {
     IP_dest = find_user_ip(info.userName_dest);
     printf("IP_dest: %s\n", IP_dest);
 
-    strcpy(info.behaviour, "info");
-
     if (strcmp(IP_dest, "not found") == 0) {
         strcpy(dest_info.user_IP, "not found");
         
@@ -221,6 +228,7 @@ void p2p() {
         strcpy(dest_info.user_IP, IP_dest);
     }
 
+    // sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
     sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
 
 }
