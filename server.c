@@ -189,11 +189,11 @@ void client_server() {
     }
 
 
-    inet_ntop(AF_INET, &(client_addr.sin_addr), oldIP, INET_ADDRSTRLEN);
+    inet_ntop(AF_INET, &(client_addr.sin_addr.s_addr), oldIP, INET_ADDRSTRLEN);
     printf("oldIP: %s\n", oldIP);
 
     // change ip to client2
-    inet_pton(AF_INET, IP_dest, &(client_addr.sin_addr));
+    inet_pton(AF_INET, IP_dest, &(client_addr.sin_addr.s_addr));
     printf("Server address2: %s\n", inet_ntoa(client_addr.sin_addr));
 
     // sends message to client2
@@ -201,7 +201,7 @@ void client_server() {
     printf("Message successufly send to client with IP: %s! %s\n", IP_dest, message_t.message);
 
     // sets ip back to old
-    inet_pton(AF_INET, oldIP, &(client_addr.sin_addr));
+    inet_pton(AF_INET, oldIP, &(client_addr.sin_addr.s_addr));
     printf("Server address3: %s\n", inet_ntoa(client_addr.sin_addr));
 
 
