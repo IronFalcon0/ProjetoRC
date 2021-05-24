@@ -12,6 +12,7 @@
 #define MAX_LINE 100
 #define MAX_INFO 30
 #define MAX_TEXT 1024
+#define MAX_GROUP 10
 
 
 typedef struct user_info {
@@ -37,15 +38,18 @@ typedef struct msg_t {
 
 struct sockaddr_in serv_addr;
 socklen_t slen = sizeof(serv_addr);
-int s, reply_server, clients_port, admin_port;
+int s, reply_server, clients_port;
 user_info user;
 pthread_t msg_thread;
 pthread_mutex_t mutex_listen = PTHREAD_MUTEX_INITIALIZER;
+char groups[MAX_GROUP][MAX_INFO];
+int n_groups = 0;
 
 void *messages_incoming();
 void client_server();
 void p2p();
 void group();
+void join_group();
 void multicast_message();
 void listen_group_msg();
 
@@ -66,8 +70,7 @@ int main(int argc, char** argv) {
         exit(-1);
     }
 
-    clients_port = atoi(argv[1]);
-    admin_port = atoi(argv[2]);
+    clients_port = atoi(argv[2]);
 
     // UDP connection to server
     // socket for UDP packages
@@ -76,7 +79,7 @@ int main(int argc, char** argv) {
 	}
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(admin_port);
+	serv_addr.sin_port = htons(clients_port);
     inet_pton(AF_INET, argv[1], &(serv_addr.sin_addr.s_addr));
     //serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
 
@@ -242,33 +245,63 @@ void group() {
     char txt[5];
     int option = -1;
 
+    pthread_cancel(msg_thread);
+
     while(option != 0) {
         printf("Select option:\n\t1: Create/Join group\n\t2: Send message to group\n\t3: Listen for group messages\n");
         fgets(txt, sizeof(txt), stdin);
         option = atoi(txt);
 
         if (option == 1) {
-            
+            join_group();
 
         } else if (option == 2) {
             multicast_message();
+
         } else if (option == 3) {
             listen_group_msg();
         }
 
     }
+
+    pthread_create(&msg_thread, NULL, messages_incoming, NULL);
+}
+
+
+void join_group() {
+    char txt[5];
+    int option = -1;
+    msg_t msg;
+
+    printf("Chose group IP:\n");
+    for (int i = 0; i <n_groups; i++) {
+        printf("\t%d: %s\n", i, groups[i]);
+    }
+    printf("\t%d: New Group", n_groups);
+    fgets(txt, sizeof(txt), stdin);
+    option = atoi(txt);
+
+    strcpy(msg.message, "new group");
+
+    if (option == n_groups) {
+        sendto(s, &msg, sizeof(msg), 0, (struct sockaddr*)&serv_addr, (socklen_t ) slen);
+    }
+
 }
 
 void multicast_message() {
     struct sockaddr_in groupSock;
     struct in_addr localInterface;
-    socklen_t group_len = sizeof(groupSock);
-    msg_t message_t, message_r;
-    char group_IP_dest[MAX_INFO];
+    msg_t message_t;
+    char multicast_IP[MAX_INFO];
+    //int sd;
+
+    //sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     
     // gets message info
-    printf("Destination Group IP: ");
-    fgets(group_IP_dest, sizeof(group_IP_dest), stdin);
+    // printf("Destination Group IP: ");
+    // fgets(multicast_IP, sizeof(multicast_IP), stdin);
+    strcpy(multicast_IP, "226.1.1.1");
 
     printf("Message: ");
     fgets(message_t.message, sizeof(message_t.message), stdin);
@@ -278,11 +311,24 @@ void multicast_message() {
     // initialize group socket
     memset((char *) &groupSock, 0, sizeof(groupSock));
     groupSock.sin_family = AF_INET;
-    inet_pton(AF_INET, group_IP_dest, &(groupSock.sin_addr.s_addr));
+    groupSock.sin_addr.s_addr = inet_addr(multicast_IP);
     groupSock.sin_port = htons(clients_port);
 
-    localInterface.s_addr = inet_addr("127.0.0.1");
 
+    printf("Group address: %s == UDP port: %d\n", inet_ntoa(groupSock.sin_addr), ntohs(groupSock.sin_port));
+    printf("local interface: %s\n", inet_ntoa(localInterface));
+    
+    // change ttl
+    int multicastTTL = 255;
+    if(setsockopt(s, IPPROTO_IP, IP_MULTICAST_IF, (char *)&multicastTTL, sizeof(multicastTTL)) < 0) {
+        perror("Setting local interface error");
+        return;
+    } else {
+        printf("Setting the local interface...OK\n");
+    }
+
+    // set interfaceIP
+    localInterface.s_addr = inet_addr(user.ip);
     if(setsockopt(s, IPPROTO_IP, IP_MULTICAST_IF, (char *)&localInterface, sizeof(localInterface)) < 0) {
         perror("Setting local interface error");
         return;
@@ -290,37 +336,26 @@ void multicast_message() {
         printf("Setting the local interface...OK\n");
     }
 
-    sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr*)&groupSock, sizeof(groupSock));
-
-    printf("Message sent\n");
-
-    /*if((reply_server = recvfrom(s, &message_r, sizeof(message_r), 0, (struct sockaddr *) &groupSock, (socklen_t *)&group_len)) == -1) {
-	        perror("Error on recvfrom");
-            return;
-	}
-    
-    if(read(s, &message_r, sizeof(message_r)) < 0) {
-        perror("Reading datagram message error\n");
-        return;
-
+    //sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr*)&groupSock, sizeof(groupSock));
+    if(sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr*)&groupSock, sizeof(groupSock)) < 0) {
+        perror("Sending datagram message error");
     } else {
-    printf("Reading datagram message from client...OK\n");
-    printf("The message from %s is: %s\n", message_r.userName, message_r.message);
-    }*/
-
-
-    pthread_cancel(msg_thread);
-
-
-
-    pthread_create(&msg_thread, NULL, messages_incoming, NULL);
+        printf("Sending datagram message...OK\n");
+    }
+ 
+    printf("Message sent\n");
 
 }
 
+
 void listen_group_msg() {
     struct sockaddr_in localSock;
+    socklen_t group_len = sizeof(localSock);
     struct ip_mreq group;
     msg_t message_t;
+    //int sd;
+
+    // sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     int reuse = 1;
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) {
@@ -333,10 +368,20 @@ void listen_group_msg() {
     memset((char *) &localSock, 0, sizeof(localSock));
     localSock.sin_family = AF_INET;
     localSock.sin_port = htons(clients_port);
-    localSock.sin_addr.s_addr = INADDR_ANY;
+    localSock.sin_addr.s_addr = INADDR_ANY;// inet_addr("127.0.0.1");
 
-    group.imr_multiaddr.s_addr = inet_addr("127.0.0.1");
-    group.imr_interface.s_addr = inet_addr("127.0.0.1");
+    group.imr_multiaddr.s_addr = inet_addr("226.1.1.1");
+    group.imr_interface.s_addr = inet_addr(user.ip);
+
+    printf("port: %d\n", clients_port);
+    printf("Group address: %s == UDP port: %d\n", inet_ntoa(localSock.sin_addr), ntohs(localSock.sin_port));
+    printf("local multiaddr: %s\n", inet_ntoa(group.imr_multiaddr));
+    printf("local interface: %s\n", inet_ntoa(group.imr_interface));
+
+    if(bind(s, (struct sockaddr*)&localSock, sizeof(localSock))) {
+        perror("Binding datagram socket error");
+        // return;
+    }
 
     if(setsockopt(s, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&group, sizeof(group)) < 0) {
         perror("Adding multicast group error");
@@ -345,14 +390,21 @@ void listen_group_msg() {
         printf("Adding multicast group...OK.\n");
     }
 
+    if((reply_server = recvfrom(s, &message_t, sizeof(message_t), 0, (struct sockaddr *) &localSock, (socklen_t *)&group_len)) == -1) {
+        perror("Error on recvfrom");
+        return;
+	}
+    printf("Reading datagram message...OK.\n");
+    printf("The message from multicast server is: \"%s\"\n", message_t.message);
 
+    /*
     if(read(s, &message_t, sizeof(message_t)) < 0) {
         perror("Reading datagram message error");
         return;
     } else {
         printf("Reading datagram message...OK.\n");
         printf("The message from multicast server is: \"%s\"\n", message_t.message);
-    }
+    }*/
 
 }
 

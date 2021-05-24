@@ -20,6 +20,7 @@
 #define MAX_INFO 30
 #define MAX_USERS 50
 #define MAX_TEXT 1024
+#define MAX_GROUP 10
 
 
 typedef struct user_info {
@@ -54,6 +55,8 @@ socklen_t client_len = sizeof(client_addr);
 socklen_t config_size = sizeof(serv_config_addr);
 int s_clients, recv_len;
 user_info info;
+char groups[MAX_GROUP][MAX_INFO] = { "224.0.0.1", "224.0.0.2", "224.0.0.3", "224.0.0.4", "224.0.0.5", "224.0.0.6", "224.0.0.7", "224.0.0.8", "224.0.0.9", "224.0.0.10" };
+int n_groups = 0;
 
 pthread_t config_thread;
 
@@ -149,6 +152,7 @@ int main(int argc, char** argv){
             perror("Error on recvfrom");
         }
 
+        printf("%s\n", info.behavior);
         printf("Server IP: %s === Port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
         printf("Client IP: %s === Port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
@@ -315,7 +319,9 @@ int get_info(char *str){
 
         if(tok != NULL){
             if((count == 0) && valid_ip(tok)) strcpy(user.ip,tok);
+
             else if(count == 1) strcpy(user.password,tok);
+
             else if(count == 2){
                 if((tok[0] != '0' && tok[0] != '1') ||(tok[1] != '0'&&tok[1] != '1')||(tok[2] != '0'&&tok[2]!='1')){
                   printf("ERROR wrong format\n");
@@ -324,8 +330,8 @@ int get_info(char *str){
                 user.client_server = tok[0] - '0';
                 user.p2p = tok[1] - '0';
                 user.group = tok[2] - '0';
-            }
-            else{
+
+            } else{
               printf("ERROR wrong format\n");
               return 0;
             }
@@ -338,7 +344,7 @@ int get_info(char *str){
         printf("ERROR wrong format\n");
         return 0;
         
-    }else{
+    } else {
         for(int i=0; i< n_users; i++){
             if(strcmp(user.userName,users[i].userName) == 0){
                 printf("Username %s is already in use\n",user.userName);
@@ -350,7 +356,6 @@ int get_info(char *str){
     }
 
     return 1;
-
 }
 
 
