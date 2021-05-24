@@ -8,6 +8,7 @@
 #include <semaphore.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <sys/types.h>
 
 #define MAX_LINE 100
 #define MAX_INFO 30
@@ -108,7 +109,7 @@ int main(int argc, char** argv) {
     strcpy(user.behavior, "autentication");
     sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
-    if((reply_server = recvfrom(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
+    if((reply_server = recvfrom(s, &user, sizeof(user), MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	}
 
@@ -154,7 +155,7 @@ void *messages_incoming() {
     msg_t reply;
 
     while(1) {
-        if((reply_server = recvfrom(s, &reply, sizeof(reply), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
+        if((reply_server = recvfrom(s, &reply, sizeof(reply), MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	    }
 

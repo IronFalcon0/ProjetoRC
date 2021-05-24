@@ -49,14 +49,16 @@ user_info users[MAX_USERS];
 int n_users = 0;
 int fd_tcp;
 
-struct sockaddr_in serv_addr, client_addr, serv_config_addr;
+struct sockaddr_in serv_addr, client_addr, client2_addr, serv_config_addr;
 socklen_t serv_len = sizeof(serv_addr);
 socklen_t client_len = sizeof(client_addr);
+socklen_t client2_len = sizeof(client2_addr);
 socklen_t config_size = sizeof(serv_config_addr);
 int s_clients, recv_len;
 user_info info;
 char groups[MAX_GROUP][MAX_INFO] = { "224.0.0.1", "224.0.0.2", "224.0.0.3", "224.0.0.4", "224.0.0.5", "224.0.0.6", "224.0.0.7", "224.0.0.8", "224.0.0.9", "224.0.0.10" };
 int n_groups = 0;
+int clients_port, config_port;
 
 pthread_t config_thread;
 
@@ -88,8 +90,6 @@ void group_conn();
 
 int main(int argc, char** argv){
 
-    sprintf(file_name,"%s",argv[3]);
-
     signal(SIGINT, sigint);
 
     if (argc != 4) {
@@ -97,15 +97,20 @@ int main(int argc, char** argv){
         exit(-1);
     }
 
+    sprintf(file_name,"%s",argv[3]);
+
+    clients_port = atoi(argv[1]);
+    config_port = atoi(argv[2]);
+
     // load user info from log file
     load_info(argv[3]);
 
     // initialize TCP connection
     bzero((void *) &serv_config_addr, sizeof(serv_config_addr));
     serv_config_addr.sin_family = AF_INET;
-    inet_aton("127.0.0.1", &serv_config_addr.sin_addr);
+    inet_aton("127.0.0.1", &serv_config_addr.sin_addr); // change to 10.90.0.1
     //serv_config_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_config_addr.sin_port = htons(atoi(argv[2]));
+    serv_config_addr.sin_port = htons(config_port);
 
     if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("Error on function socket");
@@ -133,8 +138,14 @@ int main(int argc, char** argv){
 	}
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(atoi(argv[1]));
+	serv_addr.sin_port = htons(clients_port);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
+
+
+    // initialize client2
+    client2_addr.sin_family = AF_INET;
+    client2_addr.sin_port = htons(clients_port);
+    client2_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 
 	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
@@ -143,12 +154,19 @@ int main(int argc, char** argv){
 	}
 
 
+    int reuse = 1;
+    if (setsockopt(s_clients, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) {
+        perror("Setting SO_REUSEADDR error");
+        return 1;
+    }
+
+
     // print server info
     printf("Server address: %s == UDP port: %d == TCP port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port), ntohs(serv_config_addr.sin_port));
     
     // receive info from clients and responds accordingly
     while(1) {
-        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t *) &client_len)) == -1) {
+        if((recv_len = recvfrom(s_clients, &info, sizeof(info), MSG_WAITALL, (struct sockaddr *) &client_addr, (socklen_t *) &client_len)) == -1) {
             perror("Error on recvfrom");
         }
 
@@ -173,7 +191,7 @@ int main(int argc, char** argv){
 
 
 void client_server() {
-    char oldIP[MAX_INFO];
+
     char *IP_dest;
     msg_t message_t;
 
@@ -192,26 +210,28 @@ void client_server() {
         return;
     }
 
-
-    inet_ntop(AF_INET, &(client_addr.sin_addr.s_addr), oldIP, INET_ADDRSTRLEN);
-    printf("oldIP: %s\n", oldIP);
-
     // change ip to client2
-    inet_pton(AF_INET, IP_dest, &(client_addr.sin_addr.s_addr));
-    printf("Server address2: %s\n", inet_ntoa(client_addr.sin_addr));
+    client2_addr.sin_family = AF_INET;
+	client2_addr.sin_port = htons(clients_port);
+    inet_pton(AF_INET, IP_dest ,&(client2_addr.sin_addr.s_addr));
+    
+    //char oldIP[INET_ADDRSTRLEN];
+    //inet_ntop(AF_INET, &(client_addr.sin_addr.s_addr), oldIP, sizeof(INET_ADDRSTRLEN));
+
+    //inet_pton(AF_INET, IP_dest ,&(client_addr.sin_addr.s_addr));
+
+    printf("Client address2: %s\n", inet_ntoa(client2_addr.sin_addr));
+    printf("From %s: %s", message_t.userName, message_t.message);
 
     // sends message to client2
-    sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
+    if (sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client2_addr, (socklen_t ) client2_len) < 0) {
+        perror("Sending datagram message error");
+    }
+
+    //inet_pton(AF_INET, oldIP ,&(client_addr.sin_addr.s_addr));
+
+
     printf("Message successufly send to client with IP: %s! %s\n", IP_dest, message_t.message);
-
-    // sets ip back to old
-    inet_pton(AF_INET, oldIP, &(client_addr.sin_addr.s_addr));
-    printf("Server address3: %s\n", inet_ntoa(client_addr.sin_addr));
-
-
-    // send confirmation of success
-    strcpy(message_t.message, "Message send successufly");
-    sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
 
 }
 
@@ -261,6 +281,12 @@ void autentication() {
         printf("User not autenticated\n");
     }
     sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
+    /*sleep(5);
+    msg_t message;
+
+    strcpy(message.message, "Teste server");
+    sendto(s_clients, &message, sizeof(message), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);*/
+
 }
 
 
