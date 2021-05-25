@@ -53,6 +53,7 @@ void group();
 void join_group();
 void multicast_message();
 void listen_group_msg();
+void *connections_types();
 
 
 void sigint (int sig_num) {
@@ -81,8 +82,7 @@ int main(int argc, char** argv) {
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(clients_port);
-    inet_pton(AF_INET, argv[1], &(serv_addr.sin_addr.s_addr));
-    //serv_addr.sin_addr.s_addr = htonl(INADDR_ANY); 
+    serv_addr.sin_addr.s_addr = inet_addr(argv[1]);
 
     printf("Client address: %s == UDP port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
 
@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
     strcpy(user.behavior, "autentication");
     sendto(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t ) slen);
 
-    if((reply_server = recvfrom(s, &user, sizeof(user), MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
+    if((reply_server = recvfrom(s, &user, sizeof(user), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	}
 
@@ -148,6 +148,8 @@ int main(int argc, char** argv) {
         }
     }
 
+    
+
     return 0;
 }
 
@@ -155,11 +157,11 @@ void *messages_incoming() {
     msg_t reply;
 
     while(1) {
-        if((reply_server = recvfrom(s, &reply, sizeof(reply), MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
+        if((reply_server = recvfrom(s, &reply, sizeof(reply), 0, (struct sockaddr *) &serv_addr, (socklen_t *)&slen)) == -1) {
 	        perror("Error on recvfrom");
 	    }
 
-        printf("Message received from %s: %s\n", reply.userName , reply.message);  // %s len(%ld)!    reply.userName, , strlen(reply.message)
+        printf("Message received from %s: %s\n", reply.userName , reply.message);
 
     }
 }
@@ -183,7 +185,7 @@ void client_server() {
 
 void p2p() {
     struct sockaddr_in client2_addr;
-    socklen_t client_len = sizeof(client2_addr);
+    socklen_t client2_len = sizeof(client2_addr);
     user_info c_info;
     msg_t message_t;
 
@@ -194,7 +196,6 @@ void p2p() {
     fgets(user.userName_dest, sizeof(user.userName_dest), stdin);
     user.userName_dest[strlen(user.userName_dest)-1] = 0;
     
-    // mutex lock to block thread from receiving message
 
     // sends UserName of destination
     printf("Sending to %s\n", user.userName_dest);
@@ -217,12 +218,9 @@ void p2p() {
     }
 
     // changes IP to client2
-    char IP[100];
-    strcpy(IP, c_info.user_IP);
-    printf("%s\n", IP);
     client2_addr.sin_family = AF_INET;
     client2_addr.sin_port = htons(clients_port);
-    inet_pton(AF_INET, IP ,&(client2_addr.sin_addr.s_addr));
+    client2_addr.sin_addr.s_addr = inet_addr(c_info.user_IP);
 
     // gets message
     char message[1024];
@@ -233,12 +231,10 @@ void p2p() {
     strcpy(message_t.userName, user.userName);
     strcpy(message_t.message, message);
 
-    printf("Mess== %s !!! %s ;\n", message_t.message, message_t.userName);
-
     // sends message to client2
-    sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client2_addr, (socklen_t ) client_len);
+    sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client2_addr, (socklen_t ) client2_len);
     
-
+    printf("Message send to %s: %s;\n", message_t.userName, message_t.message);
 }
 
 

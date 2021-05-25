@@ -49,10 +49,9 @@ user_info users[MAX_USERS];
 int n_users = 0;
 int fd_tcp;
 
-struct sockaddr_in serv_addr, client_addr, client2_addr, serv_config_addr;
+struct sockaddr_in serv_addr, client_addr, serv_config_addr;
 socklen_t serv_len = sizeof(serv_addr);
 socklen_t client_len = sizeof(client_addr);
-socklen_t client2_len = sizeof(client2_addr);
 socklen_t config_size = sizeof(serv_config_addr);
 int s_clients, recv_len;
 user_info info;
@@ -82,9 +81,8 @@ void printa(user_info *);
 int find_user(char [], char []);
 void *config_users(void*);
 void autentication();
-void create_connection();
-void client_server();
-void p2p();
+void client_server(int);
+void p2p(int);
 void group_conn();
 
 
@@ -110,7 +108,7 @@ int main(int argc, char** argv){
     serv_config_addr.sin_family = AF_INET;
     inet_aton("127.0.0.1", &serv_config_addr.sin_addr); // change to 10.90.0.1
     //serv_config_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_config_addr.sin_port = htons(config_port);
+    serv_config_addr.sin_port = htons((short) config_port);
 
     if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		perror("Error on function socket");
@@ -138,14 +136,14 @@ int main(int argc, char** argv){
 	}
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(clients_port);
+	serv_addr.sin_port = htons((short) clients_port);
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
 
 
     // initialize client2
-    client2_addr.sin_family = AF_INET;
-    client2_addr.sin_port = htons(clients_port);
-    client2_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    /*client2_addr.sin_family = AF_INET;
+    client2_addr.sin_port = htons((short) clients_port);
+    client2_addr.sin_addr.s_addr = htonl(INADDR_ANY);*/
 
 
 	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
@@ -164,24 +162,27 @@ int main(int argc, char** argv){
     // print server info
     printf("Server address: %s == UDP port: %d == TCP port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port), ntohs(serv_config_addr.sin_port));
     
+
+    int aux_port;
     // receive info from clients and responds accordingly
     while(1) {
-        if((recv_len = recvfrom(s_clients, &info, sizeof(info), MSG_WAITALL, (struct sockaddr *) &client_addr, (socklen_t *) &client_len)) == -1) {
+        if((recv_len = recvfrom(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t *) &client_len)) == -1) {
             perror("Error on recvfrom");
         }
 
         printf("%s\n", info.behavior);
         printf("Server IP: %s === Port: %d\n", inet_ntoa(serv_addr.sin_addr), ntohs(serv_addr.sin_port));
         printf("Client IP: %s === Port: %d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        aux_port = ntohs(client_addr.sin_port);
 
         if (strcmp(info.behavior, "autentication") == 0){
             autentication();
 
         } else if (strcmp(info.behavior, "client_server") == 0){
-            client_server();
+            client_server(aux_port);
 
         } else if (strcmp(info.behavior, "p2p") == 0){
-            p2p();
+            p2p(aux_port);
         }
     }
 
@@ -190,8 +191,9 @@ int main(int argc, char** argv){
 }
 
 
-void client_server() {
-
+void client_server(int aux_port) {
+    struct sockaddr_in client2_addr;
+    socklen_t client2_len = sizeof(client2_addr);
     char *IP_dest;
     msg_t message_t;
 
@@ -210,17 +212,22 @@ void client_server() {
         return;
     }
 
+    /*con_users_t client2_info;
+    client2_info = find_con_user(message_t.userName);
+
+    if (strcmp(client2_info.userName, "not found") == 0) {
+        strcpy(message_t.message, "Message not send");
+        sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
+        return;
+    }*/
+
     // change ip to client2
     client2_addr.sin_family = AF_INET;
-	client2_addr.sin_port = htons(clients_port);
-    inet_pton(AF_INET, IP_dest ,&(client2_addr.sin_addr.s_addr));
-    
-    //char oldIP[INET_ADDRSTRLEN];
-    //inet_ntop(AF_INET, &(client_addr.sin_addr.s_addr), oldIP, sizeof(INET_ADDRSTRLEN));
+	client2_addr.sin_port = htons((short) clients_port);
+    client2_addr.sin_addr.s_addr = inet_addr(IP_dest);
 
-    //inet_pton(AF_INET, IP_dest ,&(client_addr.sin_addr.s_addr));
 
-    printf("Client address2: %s\n", inet_ntoa(client2_addr.sin_addr));
+    printf("Client address2: %s == port: %d\n", inet_ntoa(client2_addr.sin_addr), ntohs(client2_addr.sin_port));
     printf("From %s: %s", message_t.userName, message_t.message);
 
     // sends message to client2
@@ -228,7 +235,6 @@ void client_server() {
         perror("Sending datagram message error");
     }
 
-    //inet_pton(AF_INET, oldIP ,&(client_addr.sin_addr.s_addr));
 
 
     printf("Message successufly send to client with IP: %s! %s\n", IP_dest, message_t.message);
@@ -236,7 +242,7 @@ void client_server() {
 }
 
 
-void p2p() {
+void p2p(int aux_port) {
     char *IP_dest;
     user_info dest_info;
 
@@ -252,7 +258,6 @@ void p2p() {
         strcpy(dest_info.user_IP, IP_dest);
     }
 
-    // sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
     sendto(s_clients, &dest_info, sizeof(dest_info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
 
 }
@@ -274,18 +279,21 @@ void autentication() {
         info.p2p =  users[user_index].p2p;
         info.group =  users[user_index].group;
 
+        if (strcmp(users[user_index].ip, inet_ntoa(client_addr.sin_addr)) != 0) {
+            info.autorized = 0;
+            printf("User not autenticated\n");
+        }
+
         printf("User autenticated\n");
 
     } else {
         info.autorized = 0;
         printf("User not autenticated\n");
     }
-    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
-    /*sleep(5);
-    msg_t message;
 
-    strcpy(message.message, "Teste server");
-    sendto(s_clients, &message, sizeof(message), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);*/
+
+    sendto(s_clients, &info, sizeof(info), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
+    
 
 }
 
