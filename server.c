@@ -8,10 +8,6 @@
 #include <signal.h>
 #include <unistd.h>
 #include <ctype.h>
-// #include <sys/types.h>
-// #include <arpa/inet.h>
-// #include <netdb.h>
-// #include <netinet/in.h>
 #include <sys/wait.h>
 #include <errno.h>
 
@@ -106,8 +102,7 @@ int main(int argc, char** argv){
     // initialize TCP connection
     bzero((void *) &serv_config_addr, sizeof(serv_config_addr));
     serv_config_addr.sin_family = AF_INET;
-    inet_aton("127.0.0.1", &serv_config_addr.sin_addr); // change to 10.90.0.1
-    //serv_config_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    inet_aton("10.90.0.1", &serv_config_addr.sin_addr);
     serv_config_addr.sin_port = htons((short) config_port);
 
     if ((fd_tcp = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -137,13 +132,7 @@ int main(int argc, char** argv){
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons((short) clients_port);
-    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);      // INADDR_ANY --> 0.0.0.0
-
-
-    // initialize client2
-    /*client2_addr.sin_family = AF_INET;
-    client2_addr.sin_port = htons((short) clients_port);
-    client2_addr.sin_addr.s_addr = htonl(INADDR_ANY);*/
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 
 	if (bind(s_clients, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
@@ -212,15 +201,6 @@ void client_server(int aux_port) {
         return;
     }
 
-    /*con_users_t client2_info;
-    client2_info = find_con_user(message_t.userName);
-
-    if (strcmp(client2_info.userName, "not found") == 0) {
-        strcpy(message_t.message, "Message not send");
-        sendto(s_clients, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client_addr, (socklen_t ) client_len);
-        return;
-    }*/
-
     // change ip to client2
     client2_addr.sin_family = AF_INET;
 	client2_addr.sin_port = htons((short) clients_port);
@@ -275,6 +255,7 @@ void autentication() {
     int user_index = find_user(info.userName, info.password);
     if (user_index != -1) {
         info.autorized = 1;
+        strcpy(info.ip, users[user_index].ip);
         info.client_server = users[user_index].client_server;
         info.p2p =  users[user_index].p2p;
         info.group =  users[user_index].group;
@@ -347,7 +328,7 @@ int get_info(char *str){
     strcpy(aux,str);
     tok = strtok(aux," ");
     strcpy(user.userName,tok);
-    //printf("%s\n", user.userName);
+
     for(count = 0; tok != NULL;){
         tok = strtok(NULL, " ");
 

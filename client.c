@@ -244,8 +244,10 @@ void group() {
 
     pthread_cancel(msg_thread);
 
+    printf("NOTE: not working\n");
+
     while(option != 0) {
-        printf("Select option:\n\t1: Create/Join group\n\t2: Send message to group\n\t3: Listen for group messages\n");
+        printf("Select option:\n\t1: Create/Join group\n\t2: Send message to group\n\t3: Listen for group messages\n\t0: Return\n");
         fgets(txt, sizeof(txt), stdin);
         option = atoi(txt);
 
@@ -291,13 +293,7 @@ void multicast_message() {
     struct in_addr localInterface;
     msg_t message_t;
     char multicast_IP[MAX_INFO];
-    //int sd;
 
-    //sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
-    // gets message info
-    // printf("Destination Group IP: ");
-    // fgets(multicast_IP, sizeof(multicast_IP), stdin);
     strcpy(multicast_IP, "226.1.1.1");
 
     printf("Message: ");
@@ -333,7 +329,7 @@ void multicast_message() {
         printf("Setting the local interface...OK\n");
     }
 
-    //sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr*)&groupSock, sizeof(groupSock));
+
     if(sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr*)&groupSock, sizeof(groupSock)) < 0) {
         perror("Sending datagram message error");
     } else {
@@ -350,9 +346,6 @@ void listen_group_msg() {
     socklen_t group_len = sizeof(localSock);
     struct ip_mreq group;
     msg_t message_t;
-    //int sd;
-
-    // sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
     int reuse = 1;
     if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) {
@@ -394,13 +387,5 @@ void listen_group_msg() {
     printf("Reading datagram message...OK.\n");
     printf("The message from multicast server is: \"%s\"\n", message_t.message);
 
-    /*
-    if(read(s, &message_t, sizeof(message_t)) < 0) {
-        perror("Reading datagram message error");
-        return;
-    } else {
-        printf("Reading datagram message...OK.\n");
-        printf("The message from multicast server is: \"%s\"\n", message_t.message);
-    }*/
 
 }
