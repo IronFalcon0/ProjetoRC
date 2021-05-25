@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     // UDP connection to server
     // socket for UDP packages
 	if ((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-		perror("Erro na criação do socket");
+		perror("ERROR on socket creation");
 	}
 
 	serv_addr.sin_family = AF_INET;
@@ -132,7 +132,7 @@ int main(int argc, char** argv) {
         printf("\nTypes of connections allowed:\n\t1 - client-server: %d\n\t2 - P2P: %d\n\t3 - group connection: %d\n", user.client_server, user.p2p, user.group);
         fgets(s_type, sizeof(s_type), stdin);
         type = atoi(s_type);
-        
+
         if (type == 1 && user.client_server == 1) {
             strcpy(user.behavior, "client_server");
             client_server();
@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    
+
 
     return 0;
 }
@@ -195,7 +195,7 @@ void p2p() {
     printf("Destination UserName: ");
     fgets(user.userName_dest, sizeof(user.userName_dest), stdin);
     user.userName_dest[strlen(user.userName_dest)-1] = 0;
-    
+
 
     // sends UserName of destination
     printf("Sending to %s\n", user.userName_dest);
@@ -233,7 +233,7 @@ void p2p() {
 
     // sends message to client2
     sendto(s, &message_t, sizeof(message_t), 0, (struct sockaddr *) &client2_addr, (socklen_t ) client2_len);
-    
+
     printf("Message send to %s: %s;\n", message_t.userName, message_t.message);
 }
 
@@ -294,7 +294,7 @@ void multicast_message() {
     //int sd;
 
     //sd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    
+
     // gets message info
     // printf("Destination Group IP: ");
     // fgets(multicast_IP, sizeof(multicast_IP), stdin);
@@ -314,7 +314,7 @@ void multicast_message() {
 
     printf("Group address: %s == UDP port: %d\n", inet_ntoa(groupSock.sin_addr), ntohs(groupSock.sin_port));
     printf("local interface: %s\n", inet_ntoa(localInterface));
-    
+
     // change ttl
     int multicastTTL = 255;
     if(setsockopt(s, IPPROTO_IP, IP_MULTICAST_IF, (char *)&multicastTTL, sizeof(multicastTTL)) < 0) {
@@ -339,7 +339,7 @@ void multicast_message() {
     } else {
         printf("Sending datagram message...OK\n");
     }
- 
+
     printf("Message sent\n");
 
 }
@@ -404,6 +404,3 @@ void listen_group_msg() {
     }*/
 
 }
-
-
-
